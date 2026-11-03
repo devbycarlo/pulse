@@ -49,8 +49,8 @@ export default function App() {
     oscillator.stop(ctx.currentTime + duration)
   }
 
-  // Play a single metronome-style tick.
-  // Beat 1 is accented (louder, higher); beats 2-4 are softer — creates a '1-2-3-4' rhythm.
+  // Play a single ping-pong style tick.
+  // Each tick alternates between a high 'ping' and low 'pong' — creates a back-and-forth sound.
   const playTick = () => {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
@@ -60,29 +60,27 @@ export default function App() {
     const oscillator = ctx.createOscillator()
     const gainNode = ctx.createGain()
 
-    // Triangle wave for a softer, more organic metronome tone
-    oscillator.type = 'triangle'
+    // Sine wave for a clean, digital retro-game blip
+    oscillator.type = 'sine'
 
-    const isAccent = continuousTickCounterRef.current % 4 === 0
+    const isPing = continuousTickCounterRef.current % 2 === 0
 
     if (isFinalCountdownRef.current) {
-      // Final 3 seconds: aggressive sawtooth, much higher pitch, louder, faster
-      oscillator.type = 'sawtooth'
-      oscillator.frequency.setValueAtTime(isAccent ? 2200 : 1500, ctx.currentTime)
-      gainNode.gain.setValueAtTime(isAccent ? 0.30 : 0.22, ctx.currentTime)
+      // Final 3 seconds: higher, louder, faster ping-pong
+      oscillator.frequency.setValueAtTime(isPing ? 2000 : 1300, ctx.currentTime)
+      gainNode.gain.setValueAtTime(isPing ? 0.28 : 0.20, ctx.currentTime)
     } else {
-      oscillator.type = 'triangle'
-      oscillator.frequency.setValueAtTime(isAccent ? 1000 : 650, ctx.currentTime)
-      gainNode.gain.setValueAtTime(isAccent ? 0.18 : 0.10, ctx.currentTime)
+      oscillator.frequency.setValueAtTime(isPing ? 900 : 500, ctx.currentTime)
+      gainNode.gain.setValueAtTime(isPing ? 0.16 : 0.09, ctx.currentTime)
     }
 
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07)
 
     oscillator.connect(gainNode)
     gainNode.connect(ctx.destination)
 
     oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + 0.08)
+    oscillator.stop(ctx.currentTime + 0.07)
 
     continuousTickCounterRef.current += 1
   }
@@ -91,7 +89,7 @@ export default function App() {
   const startContinuousTick = () => {
     continuousTickCounterRef.current = 0
     isFinalCountdownRef.current = false
-    // Tick 4 times per second with metronome accent on beat 1
+    // Tick 4 times per second, alternating ping-pong
     continuousTickIntervalRef.current = setInterval(playTick, 250)
     playTick()
   }
@@ -173,7 +171,6 @@ export default function App() {
           clearInterval(continuousTickIntervalRef.current)
           continuousTickIntervalRef.current = setInterval(playTick, 250)
         }
-        isFinalCountdownRef.current = false
       }
 
       if (next < 0) {
