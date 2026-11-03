@@ -66,10 +66,12 @@ export default function App() {
     const isAccent = continuousTickCounterRef.current % 4 === 0
 
     if (isFinalCountdownRef.current) {
-      // Final 3 seconds: higher pitch, faster rhythm feel
-      oscillator.frequency.setValueAtTime(isAccent ? 1800 : 1200, ctx.currentTime)
-      gainNode.gain.setValueAtTime(isAccent ? 0.22 : 0.14, ctx.currentTime)
+      // Final 3 seconds: aggressive sawtooth, much higher pitch, louder, faster
+      oscillator.type = 'sawtooth'
+      oscillator.frequency.setValueAtTime(isAccent ? 2200 : 1500, ctx.currentTime)
+      gainNode.gain.setValueAtTime(isAccent ? 0.30 : 0.22, ctx.currentTime)
     } else {
+      oscillator.type = 'triangle'
       oscillator.frequency.setValueAtTime(isAccent ? 1000 : 650, ctx.currentTime)
       gainNode.gain.setValueAtTime(isAccent ? 0.18 : 0.10, ctx.currentTime)
     }
@@ -88,6 +90,7 @@ export default function App() {
   // Start a continuous background ticking sound (always on while timer runs)
   const startContinuousTick = () => {
     continuousTickCounterRef.current = 0
+    isFinalCountdownRef.current = false
     // Tick 4 times per second with metronome accent on beat 1
     continuousTickIntervalRef.current = setInterval(playTick, 250)
     playTick()
@@ -158,7 +161,18 @@ export default function App() {
         playBeep(440, 0.15)
         isFinalCountdownRef.current = true
         continuousTickCounterRef.current = 0
+        // Faster ticking during final 3 seconds (twice as fast)
+        if (continuousTickIntervalRef.current) {
+          clearInterval(continuousTickIntervalRef.current)
+          continuousTickIntervalRef.current = setInterval(playTick, 125)
+        }
       } else if (next < 0) {
+        isFinalCountdownRef.current = false
+        // Return to normal ticking speed
+        if (continuousTickIntervalRef.current) {
+          clearInterval(continuousTickIntervalRef.current)
+          continuousTickIntervalRef.current = setInterval(playTick, 250)
+        }
         isFinalCountdownRef.current = false
       }
 

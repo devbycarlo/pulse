@@ -22,7 +22,7 @@ query ListUsers @auth(level: PUBLIC, insecureReason: "Public profiles are part o
 # ---------------------------------------------------------------
 
 query GetWorkoutCategory($id: UUID!) @auth(level: USER) {
-  workoutCategory(id: $id, where: { userId: { eq_expr: "auth.uid" } }) {
+  workoutCategory(first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }) {
     name
   }
 }
@@ -38,7 +38,7 @@ query ListMyWorkoutCategories @auth(level: USER) {
 # ---------------------------------------------------------------
 
 query GetRoutine($id: UUID!) @auth(level: USER) {
-  routine(id: $id, where: { userId: { eq_expr: "auth.uid" } }) {
+  routine(first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }) {
     name
     workDurationSeconds
     rounds
@@ -57,7 +57,7 @@ query ListMyRoutines @auth(level: USER) {
 # ---------------------------------------------------------------
 
 query GetInterval($id: UUID!) @auth(level: USER) {
-  interval(id: $id, where: { routine: { userId: { eq_expr: "auth.uid" } } }) {
+  interval(first: { where: { id: { eq: $id }, routine: { userId: { eq_expr: "auth.uid" } } } }) {
     name
     durationSeconds
     sequenceOrder
@@ -81,7 +81,7 @@ query ListIntervalsForRoutine($routineId: UUID!) @auth(level: USER) {
 # ---------------------------------------------------------------
 
 query GetWorkoutSession($id: UUID!) @auth(level: USER) {
-  workoutSession(id: $id, where: { userId: { eq_expr: "auth.uid" } }) {
+  workoutSession(first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }) {
     completedAt
     totalDurationSeconds
   }

@@ -42,14 +42,19 @@ mutation CreateWorkoutCategory($name: String!) @auth(level: USER) {
   })
 }
 
-# Rename an existing category
+# Rename an existing category (scoped to the authenticated user)
 mutation UpdateWorkoutCategory($id: UUID!, $name: String!) @auth(level: USER) {
-  workoutCategory_update(key: { id: $id }, data: { name: $name }, where: { userId: { eq_expr: "auth.uid" } })
+  workoutCategory_update(
+    first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }
+    data: { name: $name }
+  )
 }
 
-# Delete a category
+# Delete a category (scoped to the authenticated user)
 mutation DeleteWorkoutCategory($id: UUID!) @auth(level: USER) {
-  workoutCategory_delete(key: { id: $id }, where: { userId: { eq_expr: "auth.uid" } })
+  workoutCategory_delete(
+    first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }
+  )
 }
 
 # ---------------------------------------------------------------
@@ -76,17 +81,22 @@ mutation CreateRoutine(
   })
 }
 
-# Update a routine's name or description
+# Update a routine's name or description (scoped to the authenticated user)
 mutation UpdateRoutine($id: UUID!, $name: String, $description: String) @auth(level: USER) {
-  routine_update(key: { id: $id }, data: {
-    name: $name,
-    description: $description
-  }, where: { userId: { eq_expr: "auth.uid" } })
+  routine_update(
+    first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }
+    data: {
+      name: $name,
+      description: $description
+    }
+  )
 }
 
-# Delete a routine
+# Delete a routine (scoped to the authenticated user)
 mutation DeleteRoutine($id: UUID!) @auth(level: USER) {
-  routine_delete(key: { id: $id }, where: { userId: { eq_expr: "auth.uid" } })
+  routine_delete(
+    first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }
+  )
 }
 
 # ---------------------------------------------------------------
@@ -100,17 +110,22 @@ mutation CreateInterval($name: String!, $durationSeconds: Int!, $sequenceOrder: 
     durationSeconds: $durationSeconds,
     sequenceOrder: $sequenceOrder,
     routineId: $routineId
-  }, where: { routine: { userId: { eq_expr: "auth.uid" } } })
+  })
 }
 
-# Change an interval's duration
+# Change an interval's duration (scoped to the routine's owner)
 mutation UpdateInterval($id: UUID!, $durationSeconds: Int) @auth(level: USER) {
-  interval_update(key: { id: $id }, data: { durationSeconds: $durationSeconds }, where: { routine: { userId: { eq_expr: "auth.uid" } } })
+  interval_update(
+    first: { where: { id: { eq: $id }, routine: { userId: { eq_expr: "auth.uid" } } } }
+    data: { durationSeconds: $durationSeconds }
+  )
 }
 
-# Remove an interval
+# Remove an interval (scoped to the routine's owner)
 mutation DeleteInterval($id: UUID!) @auth(level: USER) {
-  interval_delete(key: { id: $id }, where: { routine: { userId: { eq_expr: "auth.uid" } } })
+  interval_delete(
+    first: { where: { id: { eq: $id }, routine: { userId: { eq_expr: "auth.uid" } } } }
+  )
 }
 
 # ---------------------------------------------------------------
@@ -131,12 +146,17 @@ mutation CreateWorkoutSession(
   })
 }
 
-# Adjust the total duration of a recorded session
+# Adjust the total duration of a recorded session (scoped to the session's owner)
 mutation UpdateWorkoutSession($id: UUID!, $totalDurationSeconds: Int!) @auth(level: USER) {
-  workoutSession_update(key: { id: $id }, data: { totalDurationSeconds: $totalDurationSeconds }, where: { userId: { eq_expr: "auth.uid" } })
+  workoutSession_update(
+    first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }
+    data: { totalDurationSeconds: $totalDurationSeconds }
+  )
 }
 
-# Delete a recorded session
+# Delete a recorded session (scoped to the session's owner)
 mutation DeleteWorkoutSession($id: UUID!) @auth(level: USER) {
-  workoutSession_delete(key: { id: $id }, where: { userId: { eq_expr: "auth.uid" } })
+  workoutSession_delete(
+    first: { where: { id: { eq: $id }, userId: { eq_expr: "auth.uid" } } }
+  )
 }
