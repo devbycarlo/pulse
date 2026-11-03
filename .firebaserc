@@ -1,6 +1,6 @@
 {
   "projects": {
-    "default": "get-pulse"
+    "default": "pulse"
   },
   "targets": {},
   "etags": {}
