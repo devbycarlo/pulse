@@ -44,12 +44,12 @@ mutation CreateWorkoutCategory($name: String!) @auth(level: USER) {
 
 # Rename an existing category
 mutation UpdateWorkoutCategory($id: UUID!, $name: String!) @auth(level: USER) {
-  workoutCategory_update(key: { id: $id }, data: { name: $name })
+  workoutCategory_update(key: { id: $id }, data: { name: $name }, where: { userId: { eq_expr: "auth.uid" } })
 }
 
 # Delete a category
 mutation DeleteWorkoutCategory($id: UUID!) @auth(level: USER) {
-  workoutCategory_delete(key: { id: $id })
+  workoutCategory_delete(key: { id: $id }, where: { userId: { eq_expr: "auth.uid" } })
 }
 
 # ---------------------------------------------------------------
@@ -81,12 +81,12 @@ mutation UpdateRoutine($id: UUID!, $name: String, $description: String) @auth(le
   routine_update(key: { id: $id }, data: {
     name: $name,
     description: $description
-  })
+  }, where: { userId: { eq_expr: "auth.uid" } })
 }
 
 # Delete a routine
 mutation DeleteRoutine($id: UUID!) @auth(level: USER) {
-  routine_delete(key: { id: $id })
+  routine_delete(key: { id: $id }, where: { userId: { eq_expr: "auth.uid" } })
 }
 
 # ---------------------------------------------------------------
@@ -100,17 +100,17 @@ mutation CreateInterval($name: String!, $durationSeconds: Int!, $sequenceOrder: 
     durationSeconds: $durationSeconds,
     sequenceOrder: $sequenceOrder,
     routineId: $routineId
-  })
+  }, where: { routine: { userId: { eq_expr: "auth.uid" } } })
 }
 
 # Change an interval's duration
 mutation UpdateInterval($id: UUID!, $durationSeconds: Int) @auth(level: USER) {
-  interval_update(key: { id: $id }, data: { durationSeconds: $durationSeconds })
+  interval_update(key: { id: $id }, data: { durationSeconds: $durationSeconds }, where: { routine: { userId: { eq_expr: "auth.uid" } } })
 }
 
 # Remove an interval
 mutation DeleteInterval($id: UUID!) @auth(level: USER) {
-  interval_delete(key: { id: $id })
+  interval_delete(key: { id: $id }, where: { routine: { userId: { eq_expr: "auth.uid" } } })
 }
 
 # ---------------------------------------------------------------
@@ -133,10 +133,10 @@ mutation CreateWorkoutSession(
 
 # Adjust the total duration of a recorded session
 mutation UpdateWorkoutSession($id: UUID!, $totalDurationSeconds: Int!) @auth(level: USER) {
-  workoutSession_update(key: { id: $id }, data: { totalDurationSeconds: $totalDurationSeconds })
+  workoutSession_update(key: { id: $id }, data: { totalDurationSeconds: $totalDurationSeconds }, where: { userId: { eq_expr: "auth.uid" } })
 }
 
 # Delete a recorded session
 mutation DeleteWorkoutSession($id: UUID!) @auth(level: USER) {
-  workoutSession_delete(key: { id: $id })
+  workoutSession_delete(key: { id: $id }, where: { userId: { eq_expr: "auth.uid" } })
 }

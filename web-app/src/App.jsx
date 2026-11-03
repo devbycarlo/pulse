@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import './App.css'
 
 export default function App() {
@@ -18,8 +18,13 @@ export default function App() {
   const [restInput, setRestInput] = useState('10')
   const [roundsInput, setRoundsInput] = useState('8')
 
-  // Web Audio API - use ref to persist across renders
+  // Web Audio API - use refs to persist across renders
   const audioCtxRef = useRef(null)
+  const continuousOscRef = useRef(null)
+  const continuousGainRef = useRef(null)
+  const continuousTickIntervalRef = useRef(null)
+  const continuousTickCounterRef = useRef(0)
+  const isFinalCountdownRef = useRef(false)
 
   // Beep function using Web Audio API
   const playBeep = (frequency, duration, type = 'sine') => {
@@ -42,6 +47,67 @@ export default function App() {
 
     oscillator.start(ctx.currentTime)
     oscillator.stop(ctx.currentTime + duration)
+  }
+
+  // Play a single metronome-style tick.
+  // Beat 1 is accented (louder, higher); beats 2-4 are softer — creates a '1-2-3-4' rhythm.
+  const playTick = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+    }
+    const ctx = audioCtxRef.current
+    if (ctx.state === 'suspended') ctx.resume()
+    const oscillator = ctx.createOscillator()
+    const gainNode = ctx.createGain()
+
+    // Triangle wave for a softer, more organic metronome tone
+    oscillator.type = 'triangle'
+
+    const isAccent = continuousTickCounterRef.current % 4 === 0
+
+    if (isFinalCountdownRef.current) {
+      // Final 3 seconds: higher pitch, faster rhythm feel
+      oscillator.frequency.setValueAtTime(isAccent ? 1800 : 1200, ctx.currentTime)
+      gainNode.gain.setValueAtTime(isAccent ? 0.22 : 0.14, ctx.currentTime)
+    } else {
+      oscillator.frequency.setValueAtTime(isAccent ? 1000 : 650, ctx.currentTime)
+      gainNode.gain.setValueAtTime(isAccent ? 0.18 : 0.10, ctx.currentTime)
+    }
+
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08)
+
+    oscillator.connect(gainNode)
+    gainNode.connect(ctx.destination)
+
+    oscillator.start(ctx.currentTime)
+    oscillator.stop(ctx.currentTime + 0.08)
+
+    continuousTickCounterRef.current += 1
+  }
+
+  // Start a continuous background ticking sound (always on while timer runs)
+  const startContinuousTick = () => {
+    continuousTickCounterRef.current = 0
+    // Tick 4 times per second with metronome accent on beat 1
+    continuousTickIntervalRef.current = setInterval(playTick, 250)
+    playTick()
+  }
+
+  // Stop the continuous background ticking sound
+  const stopContinuousTick = () => {
+    if (continuousTickIntervalRef.current) {
+      clearInterval(continuousTickIntervalRef.current)
+      continuousTickIntervalRef.current = null
+    }
+    continuousTickCounterRef.current = 0
+    if (continuousOscRef.current) {
+      try { continuousOscRef.current.stop() } catch (e) {}
+      continuousOscRef.current = null
+    }
+    if (continuousGainRef.current) {
+      try { continuousGainRef.current.gain.setValueAtTime(0, continuousGainRef.current.context.currentTime) } catch (e) {}
+      continuousGainRef.current = null
+    }
   }
 
   // Update settings when user changes inputs (only when idle)
@@ -90,6 +156,10 @@ export default function App() {
       // Countdown beeps (3, 2, 1)
       if (next <= 3 && next > 0) {
         playBeep(440, 0.15)
+        isFinalCountdownRef.current = true
+        continuousTickCounterRef.current = 0
+      } else if (next < 0) {
+        isFinalCountdownRef.current = false
       }
 
       if (next < 0) {
@@ -130,12 +200,14 @@ export default function App() {
       // Pause
       clearInterval(timerInterval)
       setTimerInterval(null)
+      stopContinuousTick()
       playBeep(880, 0.4, 'triangle')
     } else {
       // Start / Resume
       if (currentPhase === 'idle') {
         setCurrentPhase('work')
       }
+      startContinuousTick()
       const intervalId = setInterval(tick, 1000)
       setTimerInterval(intervalId)
       playBeep(920, 0.4, 'triangle')
@@ -148,6 +220,7 @@ export default function App() {
       clearInterval(timerInterval)
       setTimerInterval(null)
     }
+    stopContinuousTick()
     setCurrentPhase('idle')
     setCurrentRound(1)
     setTimeLeft(workDuration)
