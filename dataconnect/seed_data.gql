@@ -1,0 +1,27 @@
+mutation SeedDatabase @transaction @auth(expr: "auth.token.admin == true") {
+  user_insertMany(data: [
+    { id: "00000000-0000-0000-0000-000000000001", username: "alice_fit", email: "alice@example.com" },
+    { id: "00000000-0000-0000-0000-000000000002", username: "bob_gym", email: "bob@example.com" },
+    { id: "00000000-0000-0000-0000-000000000003", username: "charlie_run", email: "charlie@example.com" }
+  ])
+  workoutCategory_insertMany(data: [
+    { id: "10000000-0000-0000-0000-000000000001", name: "Cardio", userId: "00000000-0000-0000-0000-000000000001" },
+    { id: "10000000-0000-0000-0000-000000000002", name: "Strength", userId: "00000000-0000-0000-0000-000000000002" },
+    { id: "10000000-0000-0000-0000-000000000003", name: "Flexibility", userId: "00000000-0000-0000-0000-000000000003" }
+  ])
+  routine_insertMany(data: [
+    { id: "20000000-0000-0000-0000-000000000001", name: "Morning HIIT", workDurationSeconds: 45, restDurationSeconds: 15, rounds: 3, userId: "00000000-0000-0000-0000-000000000001", workoutCategoryId: "10000000-0000-0000-0000-000000000001" },
+    { id: "20000000-0000-0000-0000-000000000002", name: "Heavy Lift", workDurationSeconds: 60, restDurationSeconds: 90, rounds: 5, userId: "00000000-0000-0000-0000-000000000002", workoutCategoryId: "10000000-0000-0000-0000-000000000002" },
+    { id: "20000000-0000-0000-0000-000000000003", name: "Yoga Flow", workDurationSeconds: 120, restDurationSeconds: 0, rounds: 1, userId: "00000000-0000-0000-0000-000000000003", workoutCategoryId: "10000000-0000-0000-0000-000000000003" }
+  ])
+  interval_insertMany(data: [
+    { name: "Warm-up", durationSeconds: 300, sequenceOrder: 1, routineId: "20000000-0000-0000-0000-000000000001" },
+    { name: "Sprint", durationSeconds: 45, sequenceOrder: 2, routineId: "20000000-0000-0000-0000-000000000001" },
+    { name: "Bench Press", durationSeconds: 60, sequenceOrder: 1, routineId: "20000000-0000-0000-0000-000000000002" }
+  ])
+  workoutSession_insertMany(data: [
+    { completedAt: "2023-10-27T10:00:00Z", totalDurationSeconds: 1800, userId: "00000000-0000-0000-0000-000000000001", routineId: "20000000-0000-0000-0000-000000000001" },
+    { completedAt: "2023-10-27T11:00:00Z", totalDurationSeconds: 3600, userId: "00000000-0000-0000-0000-000000000002", routineId: "20000000-0000-0000-0000-000000000002" },
+    { completedAt: "2023-10-27T12:00:00Z", totalDurationSeconds: 2400, userId: "00000000-0000-0000-0000-000000000003", routineId: "20000000-0000-0000-0000-000000000003" }
+  ])
+}

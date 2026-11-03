@@ -1,0 +1,34 @@
+type User @table {
+  username: String!
+  email: String!
+  profilePhotoUrl: String
+}
+
+type WorkoutCategory @table {
+  name: String!
+  user: User
+}
+
+type Routine @table {
+  name: String!
+  workDurationSeconds: Int!
+  restDurationSeconds: Int!
+  rounds: Int!
+  description: String
+  user: User
+  workoutCategory: WorkoutCategory
+}
+
+type Interval @table {
+  name: String!
+  durationSeconds: Int!
+  sequenceOrder: Int!
+  routine: Routine!
+}
+
+type WorkoutSession @table {
+  completedAt: Timestamp!
+  totalDurationSeconds: Int!
+  user: User!
+  routine: Routine!
+}

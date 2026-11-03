@@ -1,0 +1,142 @@
+# Example mutations for the exercise app (User, WorkoutCategory, Routine, Interval, WorkoutSession).
+# Field names are generated from the @table types in dataconnect/schema/schema.gql.
+# Use these with the Data Connect CLI: dartctl dataconnect deploy
+
+# ---------------------------------------------------------------
+# User
+# ---------------------------------------------------------------
+
+# Create a user owned by the authenticated account
+mutation CreateUser($username: String!, $email: String!, $profilePhotoUrl: String) @auth(level: USER) {
+  user_insert(data: {
+    id_expr: "auth.uid",
+    username: $username,
+    email: $email,
+    profilePhotoUrl: $profilePhotoUrl
+  })
+}
+
+# Update the authenticated user's profile
+mutation UpdateUser($username: String, $email: String, $profilePhotoUrl: String) @auth(level: USER) {
+  user_update(key: { id_expr: "auth.uid" }, data: {
+    username: $username,
+    email: $email,
+    profilePhotoUrl: $profilePhotoUrl
+  })
+}
+
+# Delete the authenticated user
+mutation DeleteUser @auth(level: USER) {
+  user_delete(key: { id_expr: "auth.uid" })
+}
+
+# ---------------------------------------------------------------
+# WorkoutCategory
+# ---------------------------------------------------------------
+
+# Create a workout category for the authenticated user
+mutation CreateWorkoutCategory($name: String!) @auth(level: USER) {
+  workoutCategory_insert(data: {
+    name: $name,
+    userId_expr: "auth.uid"
+  })
+}
+
+# Rename an existing category
+mutation UpdateWorkoutCategory($id: UUID!, $name: String!) @auth(level: USER) {
+  workoutCategory_update(key: { id: $id }, data: { name: $name })
+}
+
+# Delete a category
+mutation DeleteWorkoutCategory($id: UUID!) @auth(level: USER) {
+  workoutCategory_delete(key: { id: $id })
+}
+
+# ---------------------------------------------------------------
+# Routine
+# ---------------------------------------------------------------
+
+# Create a routine under a category, owned by the authenticated user
+mutation CreateRoutine(
+  $name: String!
+  $workDurationSeconds: Int!
+  $restDurationSeconds: Int!
+  $rounds: Int!
+  $description: String
+  $workoutCategoryId: UUID
+) @auth(level: USER) {
+  routine_insert(data: {
+    name: $name,
+    workDurationSeconds: $workDurationSeconds,
+    restDurationSeconds: $restDurationSeconds,
+    rounds: $rounds,
+    description: $description,
+    workoutCategoryId: $workoutCategoryId,
+    userId_expr: "auth.uid"
+  })
+}
+
+# Update a routine's name or description
+mutation UpdateRoutine($id: UUID!, $name: String, $description: String) @auth(level: USER) {
+  routine_update(key: { id: $id }, data: {
+    name: $name,
+    description: $description
+  })
+}
+
+# Delete a routine
+mutation DeleteRoutine($id: UUID!) @auth(level: USER) {
+  routine_delete(key: { id: $id })
+}
+
+# ---------------------------------------------------------------
+# Interval
+# ---------------------------------------------------------------
+
+# Add an interval to a routine
+mutation CreateInterval($name: String!, $durationSeconds: Int!, $sequenceOrder: Int!, $routineId: UUID!) @auth(level: USER) {
+  interval_insert(data: {
+    name: $name,
+    durationSeconds: $durationSeconds,
+    sequenceOrder: $sequenceOrder,
+    routineId: $routineId
+  })
+}
+
+# Change an interval's duration
+mutation UpdateInterval($id: UUID!, $durationSeconds: Int) @auth(level: USER) {
+  interval_update(key: { id: $id }, data: { durationSeconds: $durationSeconds })
+}
+
+# Remove an interval
+mutation DeleteInterval($id: UUID!) @auth(level: USER) {
+  interval_delete(key: { id: $id })
+}
+
+# ---------------------------------------------------------------
+# WorkoutSession
+# ---------------------------------------------------------------
+
+# Record a completed workout session
+mutation CreateWorkoutSession(
+  $routineId: UUID!
+  $completedAt: Timestamp!
+  $totalDurationSeconds: Int!
+) @auth(level: USER) {
+  workoutSession_insert(data: {
+    routineId: $routineId,
+    completedAt: $completedAt,
+    totalDurationSeconds: $totalDurationSeconds,
+    userId_expr: "auth.uid"
+  })
+}
+
+# Adjust the total duration of a recorded session
+mutation UpdateWorkoutSession($id: UUID!, $totalDurationSeconds: Int!) @auth(level: USER) {
+  workoutSession_update(key: { id: $id }, data: { totalDurationSeconds: $totalDurationSeconds })
+}
+
+# Delete a recorded session
+mutation DeleteWorkoutSession($id: UUID!) @auth(level: USER) {
+  workoutSession_delete(key: { id: $id })
+}
