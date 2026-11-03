@@ -10,14 +10,16 @@
   font-weight: 700;
   min-height: 1.5rem;
   margin-bottom: 0.5rem;
+  font-family: var(--font-condensed);
 }
 
 .time-display {
-  font-size: 6rem;
+  font-size: 10rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+  font-family: var(--font-condensed);
 }
 
 .round-info {
@@ -25,6 +27,7 @@
   color: var(--text-muted);
   margin-top: 0.5rem;
   font-weight: 500;
+  font-family: var(--font-condensed);
 }
 
 /* Settings */
@@ -47,6 +50,7 @@
   letter-spacing: 0.1em;
   color: var(--text-muted);
   font-weight: 600;
+  font-family: var(--font-condensed);
 }
 
 .input-group input {
@@ -92,7 +96,7 @@ button {
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.1s, opacity 0.2s;
-  font-family: inherit;
+  font-family: var(--font-condensed);
 }
 
 button:active {
