@@ -80,3 +80,4 @@ query ListMyWorkoutSessions @auth(level: USER) {
     id completedAt totalDurationSeconds
   }
 }
+
