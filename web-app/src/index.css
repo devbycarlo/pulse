@@ -6,7 +6,8 @@
   --work-color: #22c55e;
   --rest-color: #ef4444;
   --accent: #3b82f6;
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Barlow Semi Condensed", "Noto Sans", system-ui, sans-serif;
+  --font-condensed: "Barlow Semi Condensed", "Noto Sans Condensed", "Arial Narrow", sans-serif;
 }
 
 * {

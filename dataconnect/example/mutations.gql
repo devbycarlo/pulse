@@ -109,7 +109,8 @@ mutation CreateInterval($name: String!, $durationSeconds: Int!, $sequenceOrder: 
     name: $name,
     durationSeconds: $durationSeconds,
     sequenceOrder: $sequenceOrder,
-    routineId: $routineId
+    routineId: $routineId,
+    userId_expr: "auth.uid"
   })
 }
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-color: #0f172a;
@@ -14,8 +14,8 @@
       --work-color: #22c55e;
       --rest-color: #ef4444;
       --accent: #3b82f6;
-      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      --font-condensed: "Barlow Condensed", "Noto Sans Condensed", "Arial Narrow", sans-serif;
+      --font-sans: "Barlow Semi Condensed", "Noto Sans", system-ui, sans-serif;
+      --font-condensed: "Barlow Semi Condensed", "Noto Sans Condensed", "Arial Narrow", sans-serif;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -47,19 +47,24 @@
     /* Timer Display */
     .timer-section {
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 0.25rem;
     }
 
     .phase {
-      font-size: 1.25rem;
+      font-size: clamp(1rem, 3.5vw, 1.25rem);
       text-transform: uppercase;
       letter-spacing: 0.15em;
       font-weight: 700;
       min-height: 1.5rem;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
     }
 
     .time-display {
-      font-size: 6rem;
+      font-size: clamp(4.5rem, 15vw, 9rem);
       font-weight: 800;
       line-height: 1;
       font-variant-numeric: tabular-nums;
@@ -67,9 +72,9 @@
     }
 
     .round-info {
-      font-size: 1.125rem;
+      font-size: clamp(0.8rem, 2.5vw, 1.125rem);
       color: var(--text-muted);
-      margin-top: 0.5rem;
+      margin-top: 0.35rem;
       font-weight: 500;
     }
 
@@ -88,7 +93,7 @@
     }
 
     .input-group label {
-      font-size: 0.75rem;
+      font-size: clamp(0.65rem, 2vw, 0.875rem);
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--text-muted);
@@ -103,10 +108,11 @@
       padding: 0.75rem 0.5rem;
       border-radius: 0.75rem;
       text-align: center;
-      font-size: 1.25rem;
+      font-size: clamp(0.95rem, 2.8vw, 1.25rem);
       font-weight: 600;
       outline: none;
       transition: border-color 0.2s;
+      min-height: 48px;
     }
 
     .input-group input:focus {
@@ -119,7 +125,7 @@
       -webkit-appearance: none; 
       margin: 0; 
     }
-    input[type=number] { -moz-appearance: textfield; }
+    input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
     /* Controls */
     .controls {
@@ -132,11 +138,15 @@
       padding: 1rem;
       border: none;
       border-radius: 1rem;
-      font-size: 1.125rem;
+      font-size: clamp(0.95rem, 2.4vw, 1.125rem);
       font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
       cursor: pointer;
       transition: transform 0.1s, opacity 0.2s;
       font-family: inherit;
+      min-height: 48px;
+      touch-action: manipulation;
     }
 
     button:active { transform: scale(0.96); }
@@ -149,6 +159,33 @@
     .text-work { color: var(--work-color); }
     .text-rest { color: var(--rest-color); }
     .text-idle { color: var(--text-muted); }
+    /* Small screens: tighter spacing and larger touch targets */
+    @media (max-width: 420px) {
+      .app-container {
+        padding: 1.25rem;
+        margin: 0.75rem;
+        gap: 1.5rem;
+      }
+
+      .settings-grid {
+        gap: 0.75rem;
+      }
+
+      .input-group input {
+        padding: 0.6rem 0.4rem;
+        font-size: 1rem;
+      }
+
+      .controls {
+        gap: 0.75rem;
+      }
+
+      button {
+        min-height: 48px;
+        padding: 0.9rem 1.25rem;
+        font-size: 1rem;
+      }
+    }
   </style>
 </head>
 <body>

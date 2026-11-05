@@ -14,7 +14,7 @@
 }
 
 .time-display {
-  font-size: 10rem;
+  font-size: 12rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -94,6 +94,8 @@ button {
   border-radius: 1rem;
   font-size: 1.125rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
   cursor: pointer;
   transition: transform 0.1s, opacity 0.2s;
   font-family: var(--font-condensed);

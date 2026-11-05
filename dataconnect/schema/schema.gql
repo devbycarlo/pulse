@@ -24,6 +24,7 @@ type Interval @table {
   durationSeconds: Int!
   sequenceOrder: Int!
   routine: Routine!
+  userId: UUID!
 }
 
 type WorkoutSession @table {
