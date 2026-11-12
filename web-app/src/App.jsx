@@ -1,9 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import NoSleep from 'nosleep.js'
 import './App.css'
 
 export default function App() {
   // Wake Lock API - use refs to persist across renders
   const wakeLockRef = useRef(null)
+  const noSleepRef = useRef(null)
+  const noSleepEnabledRef = useRef(false)
+  const shouldKeepAwakeRef = useRef(false)
 
   // Settings state
   const [workDuration, setWorkDuration] = useState(30)
@@ -44,47 +48,77 @@ export default function App() {
 
   // Request screen wake lock with status tracking
   const requestWakeLock = useCallback(async () => {
+    shouldKeepAwakeRef.current = true
+
+    // Prefer native Screen Wake Lock API where supported
     try {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen')
         setWakeLockStatus('active')
         console.log('Wake Lock acquired')
-        
-        // Listen for wake lock state changes
-        wakeLockRef.current.addEventListener('statechange', () => {
-          console.log('Wake Lock state:', wakeLockRef.current?.state)
+
+        wakeLockRef.current.addEventListener('release', () => {
+          wakeLockRef.current = null
+          console.log('Wake Lock released by system')
         })
-      } else {
-        setWakeLockStatus('unsupported')
+        return
       }
     } catch (err) {
+      console.log('Wake Lock failed, falling back to NoSleep:', err.message, err.name)
+    }
+
+    // Fallback for iOS/unsupported browsers: NoSleep.js keeps screen awake via media playback
+    try {
+      if (!noSleepRef.current) {
+        noSleepRef.current = new NoSleep()
+      }
+      if (!noSleepEnabledRef.current) {
+        await noSleepRef.current.enable()
+        noSleepEnabledRef.current = true
+      }
+      setWakeLockStatus('active')
+      console.log('NoSleep fallback enabled')
+    } catch (err) {
       setWakeLockStatus('error')
-      console.log('Wake Lock failed:', err.message, err.name)
+      console.log('NoSleep fallback failed:', err.message, err.name)
     }
   }, [])
 
   // Release screen wake lock with status tracking
   const releaseWakeLock = useCallback(() => {
+    shouldKeepAwakeRef.current = false
+
     if (wakeLockRef.current) {
       wakeLockRef.current.release().catch((err) => {
         console.log('Wake Lock release failed:', err.message, err.name)
       })
       wakeLockRef.current = null
-      setWakeLockStatus('inactive')
       console.log('Wake Lock released')
     }
+
+    if (noSleepRef.current && noSleepEnabledRef.current) {
+      try {
+        noSleepRef.current.disable()
+      } catch (err) {
+        console.log('NoSleep disable failed:', err.message, err.name)
+      }
+      noSleepEnabledRef.current = false
+      console.log('NoSleep fallback disabled')
+    }
+
+    setWakeLockStatus('inactive')
   }, [])
 
-  // Handle page visibility change - release wake lock if page is hidden
+  // Re-acquire wake lock when returning to the app if the timer should stay awake
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden && wakeLockRef.current) {
-        releaseWakeLock()
+      if (document.visibilityState === 'visible' && shouldKeepAwakeRef.current) {
+        requestWakeLock()
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [releaseWakeLock])
+  }, [requestWakeLock])
 
   // Beep function using Web Audio API
   const playBeep = (frequency, duration, type = 'sine') => {
