@@ -213,9 +213,13 @@ export default function App() {
     setTimeLeft((prev) => {
       const next = prev - 1
 
-      // Change ticking tone every 3 seconds of the timer
+      // Change ticking tone and play a marker cue every 3 seconds of the timer
       if (next > 0 && next % 3 === 0) {
         tickToneIndexRef.current = (tickToneIndexRef.current + 1) % TICK_TONE_PAIRS.length
+        if (next > 3) {
+          const markerFrequencies = [700, 850, 1000, 1150, 1300]
+          playBeep(markerFrequencies[tickToneIndexRef.current % markerFrequencies.length], 0.12, 'sine')
+        }
       }
 
       // Countdown beeps (3, 2, 1) with different tones each second

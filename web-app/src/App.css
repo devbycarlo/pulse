@@ -14,7 +14,7 @@
 }
 
 .time-display {
-  font-size: clamp(8rem, 20vw, 20rem);
+  font-size: clamp(9rem, 28vw, 26rem);
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -23,7 +23,7 @@
 }
 
 .round-info {
-  font-size: 1.125rem;
+  font-size: clamp(1.25rem, 3.5vw, 2rem);
   color: var(--text-muted);
   margin-top: 0.5rem;
   font-weight: 500;
