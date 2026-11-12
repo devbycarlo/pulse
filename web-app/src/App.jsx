@@ -31,6 +31,16 @@ export default function App() {
   const continuousTickIntervalRef = useRef(null)
   const continuousTickCounterRef = useRef(0)
   const isFinalCountdownRef = useRef(false)
+  const tickToneIndexRef = useRef(0)
+
+  // Ping-pong tone pairs that rotate every 3 seconds of the timer
+  const TICK_TONE_PAIRS = [
+    [900, 500],
+    [1050, 620],
+    [1200, 720],
+    [1350, 820],
+    [1500, 900],
+  ]
 
   // Request screen wake lock with status tracking
   const requestWakeLock = useCallback(async () => {
@@ -120,7 +130,8 @@ export default function App() {
       oscillator.frequency.setValueAtTime(isPing ? 2000 : 1300, ctx.currentTime)
       gainNode.gain.setValueAtTime(isPing ? 0.28 : 0.20, ctx.currentTime)
     } else {
-      oscillator.frequency.setValueAtTime(isPing ? 900 : 500, ctx.currentTime)
+      const [pingFreq, pongFreq] = TICK_TONE_PAIRS[tickToneIndexRef.current % TICK_TONE_PAIRS.length]
+      oscillator.frequency.setValueAtTime(isPing ? pingFreq : pongFreq, ctx.currentTime)
       gainNode.gain.setValueAtTime(isPing ? 0.16 : 0.09, ctx.currentTime)
     }
 
@@ -139,6 +150,7 @@ export default function App() {
   const startContinuousTick = () => {
     continuousTickCounterRef.current = 0
     isFinalCountdownRef.current = false
+    tickToneIndexRef.current = 0
     // Tick 4 times per second, alternating ping-pong
     continuousTickIntervalRef.current = setInterval(playTick, 250)
     playTick()
@@ -200,13 +212,19 @@ export default function App() {
   const tick = () => {
     setTimeLeft((prev) => {
       const next = prev - 1
+
+      // Change ticking tone every 3 seconds of the timer
+      if (next > 0 && next % 3 === 0) {
+        tickToneIndexRef.current = (tickToneIndexRef.current + 1) % TICK_TONE_PAIRS.length
+      }
+
       // Countdown beeps (3, 2, 1) with different tones each second
       if (next <= 3 && next > 0) {
         // Different tone for each second: 3=high, 2=mid, 1=low
         const frequencies = [null, null, null, 880, 660, 440] // index by countdown number
         const duration = next === 3 ? 0.2 : next === 2 ? 0.15 : 0.1
         playBeep(frequencies[next], duration, 'sine')
-        
+
         isFinalCountdownRef.current = true
         continuousTickCounterRef.current = 0
         // Faster ticking during final 3 seconds (twice as fast)
@@ -221,10 +239,13 @@ export default function App() {
           clearInterval(continuousTickIntervalRef.current)
           continuousTickIntervalRef.current = setInterval(playTick, 250)
         }
+      } else {
+        isFinalCountdownRef.current = false
       }
 
       if (next < 0) {
         playBeep(880, 0.4, 'triangle')
+        tickToneIndexRef.current = 0
 
         if (currentPhase === 'work') {
           if (currentRound >= totalRounds) {
@@ -286,6 +307,7 @@ export default function App() {
       setTimerInterval(null)
     }
     stopContinuousTick()
+    tickToneIndexRef.current = 0
     setCurrentPhase('idle')
     setCurrentRound(1)
     setTimeLeft(workDuration)
