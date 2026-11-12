@@ -1,7 +1,10 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import './App.css'
 
 export default function App() {
+  // Wake Lock API - use refs to persist across renders
+  const wakeLockRef = useRef(null)
+
   // Settings state
   const [workDuration, setWorkDuration] = useState(30)
   const [restDuration, setRestDuration] = useState(10)
@@ -12,6 +15,9 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(workDuration)
   const [currentRound, setCurrentRound] = useState(1)
   const [timerInterval, setTimerInterval] = useState(null)
+
+  // Wake lock state
+  const [wakeLockStatus, setWakeLockStatus] = useState('unsupported') // 'unsupported' | 'active' | 'inactive' | 'error'
 
   // Input values
   const [workInput, setWorkInput] = useState('30')
@@ -25,6 +31,50 @@ export default function App() {
   const continuousTickIntervalRef = useRef(null)
   const continuousTickCounterRef = useRef(0)
   const isFinalCountdownRef = useRef(false)
+
+  // Request screen wake lock with status tracking
+  const requestWakeLock = useCallback(async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen')
+        setWakeLockStatus('active')
+        console.log('Wake Lock acquired')
+        
+        // Listen for wake lock state changes
+        wakeLockRef.current.addEventListener('statechange', () => {
+          console.log('Wake Lock state:', wakeLockRef.current?.state)
+        })
+      } else {
+        setWakeLockStatus('unsupported')
+      }
+    } catch (err) {
+      setWakeLockStatus('error')
+      console.log('Wake Lock failed:', err.message, err.name)
+    }
+  }, [])
+
+  // Release screen wake lock with status tracking
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch((err) => {
+        console.log('Wake Lock release failed:', err.message, err.name)
+      })
+      wakeLockRef.current = null
+      setWakeLockStatus('inactive')
+      console.log('Wake Lock released')
+    }
+  }, [])
+
+  // Handle page visibility change - release wake lock if page is hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && wakeLockRef.current) {
+        releaseWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [releaseWakeLock])
 
   // Beep function using Web Audio API
   const playBeep = (frequency, duration, type = 'sine') => {
@@ -133,17 +183,13 @@ export default function App() {
 
   // Update UI based on current phase
   const updateUI = () => {
-    let phaseClass = 'phase text-idle'
     let bodyColor = '#0f172a'
 
     if (currentPhase === 'work') {
-      phaseClass = 'phase text-work'
       bodyColor = '#064e3b'
     } else if (currentPhase === 'rest') {
-      phaseClass = 'phase text-rest'
       bodyColor = '#7f1d1d'
     } else if (currentPhase === 'done') {
-      phaseClass = 'phase text-idle'
       bodyColor = '#0f172a'
     }
 
@@ -154,9 +200,13 @@ export default function App() {
   const tick = () => {
     setTimeLeft((prev) => {
       const next = prev - 1
-      // Countdown beeps (3, 2, 1)
+      // Countdown beeps (3, 2, 1) with different tones each second
       if (next <= 3 && next > 0) {
-        playBeep(440, 0.15)
+        // Different tone for each second: 3=high, 2=mid, 1=low
+        const frequencies = [null, null, null, 880, 660, 440] // index by countdown number
+        const duration = next === 3 ? 0.2 : next === 2 ? 0.15 : 0.1
+        playBeep(frequencies[next], duration, 'sine')
+        
         isFinalCountdownRef.current = true
         continuousTickCounterRef.current = 0
         // Faster ticking during final 3 seconds (twice as fast)
@@ -212,6 +262,8 @@ export default function App() {
       clearInterval(timerInterval)
       setTimerInterval(null)
       stopContinuousTick()
+      // Release wake lock when paused
+      releaseWakeLock()
       playBeep(880, 0.4, 'triangle')
     } else {
       // Start / Resume
@@ -222,6 +274,8 @@ export default function App() {
       const intervalId = setInterval(tick, 1000)
       setTimerInterval(intervalId)
       playBeep(920, 0.4, 'triangle')
+      // Request wake lock when timer starts/resumes
+      requestWakeLock()
     }
   }
 
@@ -238,6 +292,8 @@ export default function App() {
     setWorkInput(workDuration.toString())
     setRestInput(restDuration.toString())
     setRoundsInput(totalRounds.toString())
+    // Release wake lock when reset
+    releaseWakeLock()
   }
 
   // Handle input changes
@@ -296,6 +352,29 @@ export default function App() {
     return { backgroundColor: 'rgba(255,255,255,0.1)' }
   }
 
+  // Wake lock indicator class
+  const getWakeLockClass = () => {
+    let classes = 'wake-lock-indicator'
+    if (wakeLockStatus === 'active') {
+      classes += ' active'
+    } else if (wakeLockStatus === 'error') {
+      classes += ' wake-lock-error'
+    } else if (wakeLockStatus === 'unsupported') {
+      classes += ' wake-lock-not-supported'
+    } else {
+      classes += ' inactive'
+    }
+    return classes
+  }
+
+  // Wake lock indicator text
+  const getWakeLockText = () => {
+    if (wakeLockStatus === 'active') return 'Screen On'
+    if (wakeLockStatus === 'unsupported') return 'Wake Lock N/A'
+    if (wakeLockStatus === 'error') return 'Wake Lock Failed'
+    return 'Screen May Sleep'
+  }
+
   return (
     <>
       <div className="app-container">
@@ -305,6 +384,10 @@ export default function App() {
             {timeDisplay}
           </div>
           {renderRoundInfo()}
+          <div className={getWakeLockClass()}>
+            <div className="wake-lock-icon"></div>
+            <span className="wake-lock-text">{getWakeLockText()}</span>
+          </div>
         </div>
 
         <div className="settings-grid">

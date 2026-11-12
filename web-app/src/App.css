@@ -129,3 +129,52 @@ button:disabled {
 .text-idle {
   color: var(--text-muted);
 }
+
+/* Wake Lock Indicator */
+.wake-lock-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+}
+.wake-lock-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+.wake-lock-icon.active {
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+.wake-lock-icon.inactive {
+  background-color: #6b7280;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.wake-lock-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-family: var(--font-condensed);
+}
+.wake-lock-text.active {
+  color: #10b981;
+}
+.wake-lock-error .wake-lock-text {
+  color: #ef4444;
+}
+.wake-lock-error .wake-lock-icon {
+  background-color: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+.wake-lock-not-supported .wake-lock-text {
+  color: #6b7280;
+}
+.wake-lock-not-supported .wake-lock-icon {
+  background-color: #6b7280;
+}
