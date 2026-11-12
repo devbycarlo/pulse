@@ -111,16 +111,36 @@ export default function App() {
     setWakeLockStatus('inactive')
   }, [])
 
-  // Re-acquire wake lock when returning to the app if the timer should stay awake
+  // Keep the screen awake while the web app is running.
+  // Wake locks may require a user gesture in some browsers (especially iOS fallback),
+  // so we try on mount/visibility changes and also on the first user interaction.
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    shouldKeepAwakeRef.current = true
+
+    const tryAcquire = () => {
       if (document.visibilityState === 'visible' && shouldKeepAwakeRef.current) {
         requestWakeLock()
       }
     }
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [requestWakeLock])
+
+    const handleFirstInteraction = () => {
+      tryAcquire()
+    }
+
+    tryAcquire()
+    document.addEventListener('visibilitychange', tryAcquire)
+    window.addEventListener('pointerdown', handleFirstInteraction, { once: true })
+    window.addEventListener('touchstart', handleFirstInteraction, { once: true })
+    window.addEventListener('keydown', handleFirstInteraction, { once: true })
+
+    return () => {
+      document.removeEventListener('visibilitychange', tryAcquire)
+      window.removeEventListener('pointerdown', handleFirstInteraction)
+      window.removeEventListener('touchstart', handleFirstInteraction)
+      window.removeEventListener('keydown', handleFirstInteraction)
+      releaseWakeLock()
+    }
+  }, [requestWakeLock, releaseWakeLock])
 
   // Beep function using Web Audio API
   const playBeep = (frequency, duration, type = 'sine') => {
@@ -324,8 +344,8 @@ export default function App() {
       clearInterval(timerInterval)
       setTimerInterval(null)
       stopContinuousTick()
-      // Release wake lock when paused
-      releaseWakeLock()
+      // Keep screen awake while the web app is running
+      requestWakeLock()
       playBeep(880, 0.4, 'triangle')
     } else {
       // Start / Resume
@@ -339,7 +359,7 @@ export default function App() {
       const intervalId = setInterval(tick, 1000)
       setTimerInterval(intervalId)
       playBeep(920, 0.4, 'triangle')
-      // Request wake lock when timer starts/resumes
+      // Ensure screen stays awake while running
       requestWakeLock()
     }
   }
@@ -359,8 +379,8 @@ export default function App() {
     setWorkInput(workDuration.toString())
     setRestInput(restDuration.toString())
     setRoundsInput(totalRounds.toString())
-    // Release wake lock when reset
-    releaseWakeLock()
+    // Keep screen awake while the web app is running
+    requestWakeLock()
   }
 
   // Handle input changes
