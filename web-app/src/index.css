@@ -40,3 +40,31 @@ body {
   gap: 2rem;
   margin: 1rem;
 }
+
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (orientation: landscape) and (min-width: 700px) {
+  .app-container {
+    max-width: 1100px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 3rem;
+    padding: 1.5rem 2rem;
+  }
+
+  .timer-section {
+    flex: 1 1 55%;
+    min-width: 0;
+  }
+
+  .side-panel {
+    flex: 0 1 360px;
+    width: min(360px, 40vw);
+    align-self: center;
+  }
+}

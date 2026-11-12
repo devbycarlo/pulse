@@ -457,58 +457,60 @@ export default function App() {
           </div>
         </div>
 
-        <div className="settings-grid">
-          <div className="input-group">
-            <label htmlFor="work-time">Work (s)</label>
-            <input
-              type="number"
-              id="work-time"
-              value={workInput}
-              min="1"
-              disabled={inputsDisabled}
-              onChange={handleWorkInputChange}
-            />
+        <div className="side-panel">
+          <div className="settings-grid">
+            <div className="input-group">
+              <label htmlFor="work-time">Work (s)</label>
+              <input
+                type="number"
+                id="work-time"
+                value={workInput}
+                min="1"
+                disabled={inputsDisabled}
+                onChange={handleWorkInputChange}
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="rest-time">Rest (s)</label>
+              <input
+                type="number"
+                id="rest-time"
+                value={restInput}
+                min="1"
+                disabled={inputsDisabled}
+                onChange={handleRestInputChange}
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="rounds">Rounds</label>
+              <input
+                type="number"
+                id="rounds"
+                value={roundsInput}
+                min="1"
+                disabled={inputsDisabled}
+                onChange={handleRoundsInputChange}
+              />
+            </div>
           </div>
-          <div className="input-group">
-            <label htmlFor="rest-time">Rest (s)</label>
-            <input
-              type="number"
-              id="rest-time"
-              value={restInput}
-              min="1"
-              disabled={inputsDisabled}
-              onChange={handleRestInputChange}
-            />
-          </div>
-          <div className="input-group">
-            <label htmlFor="rounds">Rounds</label>
-            <input
-              type="number"
-              id="rounds"
-              value={roundsInput}
-              min="1"
-              disabled={inputsDisabled}
-              onChange={handleRoundsInputChange}
-            />
-          </div>
-        </div>
 
-        <div className="controls">
-          <button
-            id="start-btn"
-            className="btn-primary"
-            onClick={handleStartClick}
-            disabled={inputsDisabled && currentPhase !== 'done'}
-          >
-            {currentPhase === 'done' ? 'Start Workout' : 'Pause'}
-          </button>
-          <button
-            id="reset-btn"
-            className="btn-secondary"
-            onClick={handleResetClick}
-          >
-            Reset
-          </button>
+          <div className="controls">
+            <button
+              id="start-btn"
+              className="btn-primary"
+              onClick={handleStartClick}
+              disabled={inputsDisabled && currentPhase !== 'done'}
+            >
+              {currentPhase === 'done' ? 'Start Workout' : 'Pause'}
+            </button>
+            <button
+              id="reset-btn"
+              className="btn-secondary"
+              onClick={handleResetClick}
+            >
+              Reset
+            </button>
+          </div>
         </div>
       </div>
     </>
