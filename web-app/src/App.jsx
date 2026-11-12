@@ -36,14 +36,16 @@ export default function App() {
   const continuousTickCounterRef = useRef(0)
   const isFinalCountdownRef = useRef(false)
   const tickToneIndexRef = useRef(0)
+  const phaseStartTimeRef = useRef(workDuration)
 
-  // Ping-pong tone pairs that rotate every 3 seconds of the timer
+  // Distinct ping-pong tone pairs, one per 3-second block of the timer
   const TICK_TONE_PAIRS = [
-    [900, 500],
-    [1050, 620],
-    [1200, 720],
-    [1350, 820],
-    [1500, 900],
+    [700, 420],
+    [900, 520],
+    [1100, 640],
+    [1300, 760],
+    [1500, 880],
+    [1700, 980],
   ]
 
   // Request screen wake lock with status tracking
@@ -157,14 +159,16 @@ export default function App() {
     // Sine wave for a clean, digital retro-game blip
     oscillator.type = 'sine'
 
-    const isPing = continuousTickCounterRef.current % 2 === 0
+    const tickCount = continuousTickCounterRef.current
+    const isPing = tickCount % 2 === 0
+    tickToneIndexRef.current = Math.floor(tickCount / 3) % TICK_TONE_PAIRS.length
 
     if (isFinalCountdownRef.current) {
       // Final 3 seconds: higher, louder, faster ping-pong
       oscillator.frequency.setValueAtTime(isPing ? 2000 : 1300, ctx.currentTime)
       gainNode.gain.setValueAtTime(isPing ? 0.28 : 0.20, ctx.currentTime)
     } else {
-      const [pingFreq, pongFreq] = TICK_TONE_PAIRS[tickToneIndexRef.current % TICK_TONE_PAIRS.length]
+      const [pingFreq, pongFreq] = TICK_TONE_PAIRS[tickToneIndexRef.current]
       oscillator.frequency.setValueAtTime(isPing ? pingFreq : pongFreq, ctx.currentTime)
       gainNode.gain.setValueAtTime(isPing ? 0.16 : 0.09, ctx.currentTime)
     }
@@ -181,9 +185,10 @@ export default function App() {
   }
 
   // Start a continuous background ticking sound (always on while timer runs)
-  const startContinuousTick = () => {
+  const startContinuousTick = (startTime = timeLeft) => {
     continuousTickCounterRef.current = 0
     isFinalCountdownRef.current = false
+    phaseStartTimeRef.current = startTime
     tickToneIndexRef.current = 0
     // Tick 4 times per second, alternating ping-pong
     continuousTickIntervalRef.current = setInterval(playTick, 250)
@@ -247,13 +252,9 @@ export default function App() {
     setTimeLeft((prev) => {
       const next = prev - 1
 
-      // Change ticking tone and play a marker cue every 3 seconds of the timer
-      if (next > 0 && next % 3 === 0) {
-        tickToneIndexRef.current = (tickToneIndexRef.current + 1) % TICK_TONE_PAIRS.length
-        if (next > 3) {
-          const markerFrequencies = [700, 850, 1000, 1150, 1300]
-          playBeep(markerFrequencies[tickToneIndexRef.current % markerFrequencies.length], 0.12, 'sine')
-        }
+      // Keep tone progression aligned with tick count; no extra 3-second marker beep
+      if (next <= 0) {
+        tickToneIndexRef.current = 0
       }
 
       // Countdown beeps (3, 2, 1) with different tones each second
@@ -294,6 +295,7 @@ export default function App() {
             // Switch to Rest
             setCurrentPhase('rest')
             setTimeLeft(restDuration)
+            phaseStartTimeRef.current = restDuration
             return restDuration
           }
         } else if (currentPhase === 'rest') {
@@ -301,6 +303,7 @@ export default function App() {
           setCurrentPhase('work')
           setCurrentRound((prevRound) => prevRound + 1)
           setTimeLeft(workDuration)
+          phaseStartTimeRef.current = workDuration
           return workDuration
         }
       }
@@ -328,8 +331,11 @@ export default function App() {
       // Start / Resume
       if (currentPhase === 'idle') {
         setCurrentPhase('work')
+        phaseStartTimeRef.current = workDuration
+        startContinuousTick(workDuration)
+      } else {
+        startContinuousTick(timeLeft)
       }
-      startContinuousTick()
       const intervalId = setInterval(tick, 1000)
       setTimerInterval(intervalId)
       playBeep(920, 0.4, 'triangle')
@@ -346,6 +352,7 @@ export default function App() {
     }
     stopContinuousTick()
     tickToneIndexRef.current = 0
+    phaseStartTimeRef.current = workDuration
     setCurrentPhase('idle')
     setCurrentRound(1)
     setTimeLeft(workDuration)
