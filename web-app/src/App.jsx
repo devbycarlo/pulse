@@ -172,34 +172,33 @@ export default function App() {
 
   // Keep the screen awake while the web app is running.
   // Wake locks may require a user gesture in some browsers (especially iOS fallback),
-  // so we try on mount/visibility changes and also on the first user interaction.
+  // so we try on mount/visibility changes and on user interaction.
   useEffect(() => {
     shouldKeepAwakeRef.current = true
 
     const tryAcquire = () => {
-      if (document.visibilityState === 'visible' && shouldKeepAwakeRef.current) {
+      if (shouldKeepAwakeRef.current && document.visibilityState === 'visible') {
         requestWakeLock()
       }
     }
 
-    const handleFirstInteraction = () => {
-      tryAcquire()
-    }
-
     tryAcquire()
     document.addEventListener('visibilitychange', tryAcquire)
-    window.addEventListener('pointerdown', handleFirstInteraction, { once: true })
-    window.addEventListener('touchstart', handleFirstInteraction, { once: true })
-    window.addEventListener('keydown', handleFirstInteraction, { once: true })
+    window.addEventListener('focus', tryAcquire)
+    window.addEventListener('pageshow', tryAcquire)
+    window.addEventListener('pointerdown', tryAcquire)
+    window.addEventListener('touchstart', tryAcquire)
+    window.addEventListener('keydown', tryAcquire)
 
     return () => {
       document.removeEventListener('visibilitychange', tryAcquire)
-      window.removeEventListener('pointerdown', handleFirstInteraction)
-      window.removeEventListener('touchstart', handleFirstInteraction)
-      window.removeEventListener('keydown', handleFirstInteraction)
-      releaseWakeLock()
+      window.removeEventListener('focus', tryAcquire)
+      window.removeEventListener('pageshow', tryAcquire)
+      window.removeEventListener('pointerdown', tryAcquire)
+      window.removeEventListener('touchstart', tryAcquire)
+      window.removeEventListener('keydown', tryAcquire)
     }
-  }, [requestWakeLock, releaseWakeLock])
+  }, [requestWakeLock])
 
   // Beep function using Web Audio API
   const playBeep = (frequency, duration, type = 'sine') => {
@@ -515,10 +514,10 @@ export default function App() {
 
   // Wake lock indicator text
   const getWakeLockText = () => {
-    if (wakeLockStatus === 'active') return 'Screen On'
-    if (wakeLockStatus === 'unsupported') return 'Wake Lock N/A'
-    if (wakeLockStatus === 'error') return 'Wake Lock Failed'
-    return 'Screen May Sleep'
+    if (wakeLockStatus === 'active') return 'Screen Awake'
+    if (wakeLockStatus === 'unsupported') return 'Tap to Keep Awake'
+    if (wakeLockStatus === 'error') return 'Tap to Keep Awake'
+    return 'Tap to Keep Awake'
   }
 
   return (
