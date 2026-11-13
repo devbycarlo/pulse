@@ -73,6 +73,24 @@ export default function App() {
     try {
       if (!noSleepRef.current) {
         noSleepRef.current = new NoSleep()
+        // Improve Safari/iOS compatibility for the fallback video element
+        const video = noSleepRef.current.noSleepVideo
+        if (video) {
+          video.muted = true
+          video.setAttribute('muted', '')
+          video.setAttribute('playsinline', '')
+          video.setAttribute('webkit-playsinline', '')
+          video.playsInline = true
+          if (!video.parentNode) {
+            video.style.position = 'absolute'
+            video.style.width = '1px'
+            video.style.height = '1px'
+            video.style.opacity = '0'
+            video.style.pointerEvents = 'none'
+            video.style.left = '-9999px'
+            document.body.appendChild(video)
+          }
+        }
       }
       if (!noSleepEnabledRef.current) {
         await noSleepRef.current.enable()
