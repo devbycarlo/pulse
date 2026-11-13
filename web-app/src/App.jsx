@@ -52,25 +52,11 @@ export default function App() {
   const requestWakeLock = useCallback(async () => {
     shouldKeepAwakeRef.current = true
 
-    // Prefer native Screen Wake Lock API where supported
-    try {
-      if ('wakeLock' in navigator) {
-        wakeLockRef.current = await navigator.wakeLock.request('screen')
-        setWakeLockStatus('active')
-        console.log('Wake Lock acquired')
+    const isIOS =
+      /iP(ad|hone|od)/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
-        wakeLockRef.current.addEventListener('release', () => {
-          wakeLockRef.current = null
-          console.log('Wake Lock released by system')
-        })
-        return
-      }
-    } catch (err) {
-      console.log('Wake Lock failed, falling back to NoSleep:', err.message, err.name)
-    }
-
-    // Fallback for iOS/unsupported browsers: NoSleep.js keeps screen awake via media playback
-    try {
+    const enableNoSleepFallback = async () => {
       if (!noSleepRef.current) {
         noSleepRef.current = new NoSleep()
         // Improve Safari/iOS compatibility for the fallback video element
@@ -96,6 +82,61 @@ export default function App() {
         await noSleepRef.current.enable()
         noSleepEnabledRef.current = true
       }
+    }
+
+    // On iOS Safari/web-app, NoSleep's media playback fallback is often more reliable
+    // than the Screen Wake Lock API, so prefer/ensure it there.
+    if (isIOS) {
+      try {
+        await enableNoSleepFallback()
+        setWakeLockStatus('active')
+        console.log('NoSleep fallback enabled (iOS)')
+      } catch (err) {
+        console.log('NoSleep fallback failed on iOS:', err.message, err.name)
+      }
+
+      try {
+        if ('wakeLock' in navigator && !wakeLockRef.current) {
+          wakeLockRef.current = await navigator.wakeLock.request('screen')
+          console.log('Wake Lock acquired (iOS)')
+          wakeLockRef.current.addEventListener('release', () => {
+            wakeLockRef.current = null
+            console.log('Wake Lock released by system')
+          })
+        }
+      } catch (err) {
+        console.log('Wake Lock request failed on iOS:', err.message, err.name)
+      }
+
+      if (noSleepEnabledRef.current || wakeLockRef.current) {
+        setWakeLockStatus('active')
+        return
+      }
+
+      setWakeLockStatus('error')
+      return
+    }
+
+    // Prefer native Screen Wake Lock API where supported
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen')
+        setWakeLockStatus('active')
+        console.log('Wake Lock acquired')
+
+        wakeLockRef.current.addEventListener('release', () => {
+          wakeLockRef.current = null
+          console.log('Wake Lock released by system')
+        })
+        return
+      }
+    } catch (err) {
+      console.log('Wake Lock failed, falling back to NoSleep:', err.message, err.name)
+    }
+
+    // Fallback for unsupported browsers: NoSleep.js keeps screen awake via media playback
+    try {
+      await enableNoSleepFallback()
       setWakeLockStatus('active')
       console.log('NoSleep fallback enabled')
     } catch (err) {
