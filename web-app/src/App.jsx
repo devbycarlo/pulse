@@ -48,155 +48,128 @@ export default function App() {
     [1700, 980],
   ]
 
-  // Request screen wake lock with status tracking
+  // Request Screen Wake Lock API sentinel to prevent the screen from sleeping.
+  // Must be called in a secure context (HTTPS/localhost) and may require a user gesture.
+  const requestWakeLockRef = useRef(null)
   const requestWakeLock = useCallback(async () => {
     shouldKeepAwakeRef.current = true
 
-    const isIOS =
-      /iP(ad|hone|od)/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-
-    const enableNoSleepFallback = async () => {
-      if (!noSleepRef.current) {
-        noSleepRef.current = new NoSleep()
-        // Improve Safari/iOS compatibility for the fallback video element
-        const video = noSleepRef.current.noSleepVideo
-        if (video) {
-          video.muted = true
-          video.setAttribute('muted', '')
-          video.setAttribute('playsinline', '')
-          video.setAttribute('webkit-playsinline', '')
-          video.playsInline = true
-          if (!video.parentNode) {
-            video.style.position = 'absolute'
-            video.style.width = '1px'
-            video.style.height = '1px'
-            video.style.opacity = '0'
-            video.style.pointerEvents = 'none'
-            video.style.left = '-9999px'
-            document.body.appendChild(video)
-          }
-        }
-      }
-      if (!noSleepEnabledRef.current) {
-        await noSleepRef.current.enable()
-        noSleepEnabledRef.current = true
-      }
-    }
-
-    // On iOS Safari/web-app, NoSleep's media playback fallback is often more reliable
-    // than the Screen Wake Lock API, so prefer/ensure it there.
-    if (isIOS) {
+    if (!('wakeLock' in navigator)) {
+      // Fallback for browsers without Screen Wake Lock API support
       try {
-        await enableNoSleepFallback()
-        setWakeLockStatus('active')
-        console.log('NoSleep fallback enabled (iOS)')
-      } catch (err) {
-        console.log('NoSleep fallback failed on iOS:', err.message, err.name)
-      }
-
-      try {
-        if ('wakeLock' in navigator && !wakeLockRef.current) {
-          wakeLockRef.current = await navigator.wakeLock.request('screen')
-          console.log('Wake Lock acquired (iOS)')
-          wakeLockRef.current.addEventListener('release', () => {
-            wakeLockRef.current = null
-            console.log('Wake Lock released by system')
-          })
+        if (!noSleepRef.current) {
+          noSleepRef.current = new NoSleep()
         }
-      } catch (err) {
-        console.log('Wake Lock request failed on iOS:', err.message, err.name)
-      }
-
-      if (noSleepEnabledRef.current || wakeLockRef.current) {
+        if (!noSleepEnabledRef.current) {
+          await noSleepRef.current.enable()
+          noSleepEnabledRef.current = true
+        }
         setWakeLockStatus('active')
-        return
+      } catch (err) {
+        console.log('Wake lock unsupported and NoSleep fallback failed:', err?.message || err)
+        setWakeLockStatus('unsupported')
       }
-
-      setWakeLockStatus('error')
       return
     }
 
-    // Prefer native Screen Wake Lock API where supported
     try {
-      if ('wakeLock' in navigator) {
-        wakeLockRef.current = await navigator.wakeLock.request('screen')
+      if (document.visibilityState !== 'visible') return
+      if (wakeLockRef.current) {
         setWakeLockStatus('active')
-        console.log('Wake Lock acquired')
-
-        wakeLockRef.current.addEventListener('release', () => {
-          wakeLockRef.current = null
-          console.log('Wake Lock released by system')
-        })
         return
       }
-    } catch (err) {
-      console.log('Wake Lock failed, falling back to NoSleep:', err.message, err.name)
-    }
 
-    // Fallback for unsupported browsers: NoSleep.js keeps screen awake via media playback
-    try {
-      await enableNoSleepFallback()
+      const sentinel = await navigator.wakeLock.request('screen')
+      wakeLockRef.current = sentinel
       setWakeLockStatus('active')
-      console.log('NoSleep fallback enabled')
+      console.log('Screen Wake Lock acquired')
+
+      sentinel.addEventListener('release', () => {
+        if (wakeLockRef.current === sentinel) {
+          wakeLockRef.current = null
+        }
+        console.log('Screen Wake Lock released')
+        // Re-acquire when the page becomes active again if we still want to stay awake
+        if (shouldKeepAwakeRef.current && document.visibilityState === 'visible') {
+          requestWakeLockRef.current?.()
+        } else if (shouldKeepAwakeRef.current) {
+          setWakeLockStatus('inactive')
+        }
+      })
     } catch (err) {
-      setWakeLockStatus('error')
-      console.log('NoSleep fallback failed:', err.message, err.name)
+      // Common causes: not a user gesture, page hidden, or platform restrictions
+      console.log('Screen Wake Lock request failed:', err?.name, err?.message)
+      if (wakeLockRef.current || noSleepEnabledRef.current) {
+        setWakeLockStatus('active')
+      } else {
+        // Last-resort fallback for environments where Wake Lock is present but unreliable
+        try {
+          if (!noSleepRef.current) noSleepRef.current = new NoSleep()
+          if (!noSleepEnabledRef.current) {
+            await noSleepRef.current.enable()
+            noSleepEnabledRef.current = true
+          }
+          setWakeLockStatus('active')
+        } catch (fallbackErr) {
+          console.log('NoSleep fallback failed:', fallbackErr?.message || fallbackErr)
+          setWakeLockStatus('error')
+        }
+      }
     }
   }, [])
 
-  // Release screen wake lock with status tracking
-  const releaseWakeLock = useCallback(() => {
+  useEffect(() => {
+    requestWakeLockRef.current = requestWakeLock
+  }, [requestWakeLock])
+
+  // Release screen wake lock and any fallback
+  const releaseWakeLock = useCallback(async () => {
     shouldKeepAwakeRef.current = false
 
     if (wakeLockRef.current) {
-      wakeLockRef.current.release().catch((err) => {
-        console.log('Wake Lock release failed:', err.message, err.name)
-      })
+      try {
+        await wakeLockRef.current.release()
+        console.log('Screen Wake Lock released')
+      } catch (err) {
+        console.log('Screen Wake Lock release failed:', err?.message || err)
+      }
       wakeLockRef.current = null
-      console.log('Wake Lock released')
     }
 
     if (noSleepRef.current && noSleepEnabledRef.current) {
       try {
         noSleepRef.current.disable()
       } catch (err) {
-        console.log('NoSleep disable failed:', err.message, err.name)
+        console.log('NoSleep disable failed:', err?.message || err)
       }
       noSleepEnabledRef.current = false
-      console.log('NoSleep fallback disabled')
     }
 
     setWakeLockStatus('inactive')
   }, [])
 
-  // Keep the screen awake while the web app is running.
-  // Wake locks may require a user gesture in some browsers (especially iOS fallback),
-  // so we try on mount/visibility changes and on user interaction.
+  // Keep the screen awake while the web app is running using the Screen Wake Lock API.
+  // Re-acquire on visibility/focus changes because the browser releases locks when hidden.
   useEffect(() => {
     shouldKeepAwakeRef.current = true
 
-    const tryAcquire = () => {
+    const handleVisibilityChange = () => {
       if (shouldKeepAwakeRef.current && document.visibilityState === 'visible') {
         requestWakeLock()
       }
     }
 
-    tryAcquire()
-    document.addEventListener('visibilitychange', tryAcquire)
-    window.addEventListener('focus', tryAcquire)
-    window.addEventListener('pageshow', tryAcquire)
-    window.addEventListener('pointerdown', tryAcquire)
-    window.addEventListener('touchstart', tryAcquire)
-    window.addEventListener('keydown', tryAcquire)
+    // Initial attempt (may require a user gesture in some browsers)
+    requestWakeLock()
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+    window.addEventListener('pageshow', handleVisibilityChange)
 
     return () => {
-      document.removeEventListener('visibilitychange', tryAcquire)
-      window.removeEventListener('focus', tryAcquire)
-      window.removeEventListener('pageshow', tryAcquire)
-      window.removeEventListener('pointerdown', tryAcquire)
-      window.removeEventListener('touchstart', tryAcquire)
-      window.removeEventListener('keydown', tryAcquire)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
+      window.removeEventListener('pageshow', handleVisibilityChange)
     }
   }, [requestWakeLock])
 
@@ -529,7 +502,16 @@ export default function App() {
             {timeDisplay}
           </div>
           {renderRoundInfo()}
-          <div className={getWakeLockClass()}>
+          <div
+            className={getWakeLockClass()}
+            onClick={() => requestWakeLock()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') requestWakeLock()
+            }}
+            role="button"
+            tabIndex={0}
+            title="Keep screen awake"
+          >
             <div className="wake-lock-icon"></div>
             <span className="wake-lock-text">{getWakeLockText()}</span>
           </div>
