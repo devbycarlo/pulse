@@ -125,6 +125,14 @@ function speak(text, enabled) {
 }
 
 export default function App() {
+  const [preventZoom, setPreventZoom] = useState(() => {
+    try {
+      const v = localStorage.getItem('pulse.preventZoom')
+      return v === null ? true : v === 'true'
+    } catch {
+      return true
+    }
+  })
   const [config, setConfig] = useState(DEFAULT_CONFIG)
   const [inputs, setInputs] = useState({
     name: DEFAULT_CONFIG.name,
@@ -410,6 +418,20 @@ export default function App() {
     if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
   }, [stopLoop])
 
+  useEffect(() => {
+    try { localStorage.setItem('pulse.preventZoom', String(preventZoom)) } catch {}
+    const meta = document.querySelector('meta[name="viewport"]')
+    if (meta) {
+      meta.setAttribute(
+        'content',
+        preventZoom
+          ? 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+          : 'width=device-width, initial-scale=1.0, viewport-fit=cover'
+      )
+    }
+    document.documentElement.style.touchAction = preventZoom ? 'manipulation' : ''
+  }, [preventZoom])
+
   const readConfigFromInputs = useCallback(() => {
     const next = {
       name: (inputs.name || 'Custom Timer').trim() || 'Custom Timer',
@@ -606,6 +628,9 @@ export default function App() {
                 <div className="toggles toggles-inline">
                   <label className="toggle"><input type="checkbox" checked={config.voice} onChange={(e) => setConfig((c) => ({ ...c, voice: e.target.checked }))} /> Voice</label>
                   <label className="toggle"><input type="checkbox" checked={config.flash} onChange={(e) => setConfig((c) => ({ ...c, flash: e.target.checked }))} /> Flash</label>
+                  <label className="toggle" title="Disable pinch/double-tap zoom on mobile (better for app-like use; turn off for accessibility)">
+                    <input type="checkbox" checked={preventZoom} onChange={(e) => setPreventZoom(e.target.checked)} /> Prevent Zoom
+                  </label>
                 </div>
 
                 <div className="settings-grid settings-grid-advanced">

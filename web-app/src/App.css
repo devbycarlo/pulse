@@ -188,6 +188,12 @@ button {
   cursor: pointer;
   transition: transform 0.1s, opacity 0.2s, background-color 0.2s;
   font-family: var(--font-condensed);
+  touch-action: manipulation;
+}
+
+input, select, textarea {
+  font-size: 16px;
+  touch-action: manipulation;
 }
 button:active { transform: scale(0.97); }
 button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
