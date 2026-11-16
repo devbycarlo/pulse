@@ -139,6 +139,7 @@ export default function App() {
   })
   const [presets, setPresets] = useState([])
   const [selectedPresetId, setSelectedPresetId] = useState('')
+  const [setupOpen, setSetupOpen] = useState(false)
 
   const [sequence, setSequence] = useState(() => buildSequence(DEFAULT_CONFIG))
   const [index, setIndex] = useState(0)
@@ -369,9 +370,14 @@ export default function App() {
     const whole = Math.ceil(remaining)
     if (whole !== lastWholeRef.current && whole >= 0) {
       lastWholeRef.current = whole
-      if (whole > 0 && whole <= 3) {
-        const f = whole === 3 ? 880 : whole === 2 ? 700 : 560
-        playBeep(f, 0.09, 'sine', 0.12)
+      if (whole > 0) {
+        if (whole <= 3) {
+          const f = whole === 3 ? 880 : whole === 2 ? 700 : 560
+          playBeep(f, 0.1, 'sine', 0.14)
+        } else {
+          // Ticking sound every second
+          playBeep(1200, 0.03, 'square', 0.035)
+        }
       }
     }
     if (remaining <= 0.01) {
@@ -580,31 +586,46 @@ export default function App() {
         </div>
 
         <div className="side-panel">
-          <div className="panel-card">
-            <div className="panel-header">
-              <h2>Workout Setup</h2>
-              <div className="toggles">
-                <label className="toggle"><input type="checkbox" checked={config.voice} onChange={(e) => setConfig((c) => ({ ...c, voice: e.target.checked }))} /> Voice</label>
-                <label className="toggle"><input type="checkbox" checked={config.flash} onChange={(e) => setConfig((c) => ({ ...c, flash: e.target.checked }))} /> Flash</label>
+          <div className={`panel-card accordion ${setupOpen ? 'open' : ''}`}>
+            <button
+              type="button"
+              className="accordion-header"
+              onClick={() => setSetupOpen((o) => !o)}
+              aria-expanded={setupOpen}
+              aria-controls="workout-setup-content"
+            >
+              <div className="accordion-title-wrap">
+                <h2>Workout Setup</h2>
+                <span className="accordion-summary">{inputs.name || 'Custom Timer'} · {formatTime(totalDuration)}</span>
+              </div>
+              <span className={`accordion-chevron ${setupOpen ? 'open' : ''}`} aria-hidden="true">▾</span>
+            </button>
+
+            <div id="workout-setup-content" className="accordion-content">
+              <div className="accordion-body">
+                <div className="toggles toggles-inline">
+                  <label className="toggle"><input type="checkbox" checked={config.voice} onChange={(e) => setConfig((c) => ({ ...c, voice: e.target.checked }))} /> Voice</label>
+                  <label className="toggle"><input type="checkbox" checked={config.flash} onChange={(e) => setConfig((c) => ({ ...c, flash: e.target.checked }))} /> Flash</label>
+                </div>
+
+                <div className="settings-grid settings-grid-advanced">
+                  <div className="input-group input-wide">
+                    <label htmlFor="name">Name</label>
+                    <input id="name" type="text" value={inputs.name} disabled={!isIdle} onChange={onInput('name')} placeholder="Workout name" />
+                  </div>
+                  <div className="input-group"><label htmlFor="prepare">Prepare</label><input id="prepare" type="text" value={inputs.prepare} disabled={!isIdle} onChange={onInput('prepare')} placeholder="0:05" /></div>
+                  <div className="input-group"><label htmlFor="warmup">Warm-up</label><input id="warmup" type="text" value={inputs.warmup} disabled={!isIdle} onChange={onInput('warmup')} placeholder="0:00" /></div>
+                  <div className="input-group"><label htmlFor="work">Work</label><input id="work" type="text" value={inputs.work} disabled={!isIdle} onChange={onInput('work')} placeholder="0:30" /></div>
+                  <div className="input-group"><label htmlFor="rest">Rest</label><input id="rest" type="text" value={inputs.rest} disabled={!isIdle} onChange={onInput('rest')} placeholder="0:10" /></div>
+                  <div className="input-group"><label htmlFor="rounds">Rounds</label><input id="rounds" type="number" min="1" value={inputs.rounds} disabled={!isIdle} onChange={onInput('rounds')} /></div>
+                  <div className="input-group"><label htmlFor="sets">Sets</label><input id="sets" type="number" min="1" value={inputs.sets} disabled={!isIdle} onChange={onInput('sets')} /></div>
+                  <div className="input-group"><label htmlFor="setRest">Set Rest</label><input id="setRest" type="text" value={inputs.setRest} disabled={!isIdle} onChange={onInput('setRest')} placeholder="1:00" /></div>
+                  <div className="input-group"><label htmlFor="cooldown">Cool-down</label><input id="cooldown" type="text" value={inputs.cooldown} disabled={!isIdle} onChange={onInput('cooldown')} placeholder="0:00" /></div>
+                </div>
+
+                <div className="hint">Times use seconds or mm:ss. Configure prepare, warm-up/cool-down, and sets/cycles for Timer Plus-style workouts.</div>
               </div>
             </div>
-
-            <div className="settings-grid settings-grid-advanced">
-              <div className="input-group input-wide">
-                <label htmlFor="name">Name</label>
-                <input id="name" type="text" value={inputs.name} disabled={!isIdle} onChange={onInput('name')} placeholder="Workout name" />
-              </div>
-              <div className="input-group"><label htmlFor="prepare">Prepare</label><input id="prepare" type="text" value={inputs.prepare} disabled={!isIdle} onChange={onInput('prepare')} placeholder="0:05" /></div>
-              <div className="input-group"><label htmlFor="warmup">Warm-up</label><input id="warmup" type="text" value={inputs.warmup} disabled={!isIdle} onChange={onInput('warmup')} placeholder="0:00" /></div>
-              <div className="input-group"><label htmlFor="work">Work</label><input id="work" type="text" value={inputs.work} disabled={!isIdle} onChange={onInput('work')} placeholder="0:30" /></div>
-              <div className="input-group"><label htmlFor="rest">Rest</label><input id="rest" type="text" value={inputs.rest} disabled={!isIdle} onChange={onInput('rest')} placeholder="0:10" /></div>
-              <div className="input-group"><label htmlFor="rounds">Rounds</label><input id="rounds" type="number" min="1" value={inputs.rounds} disabled={!isIdle} onChange={onInput('rounds')} /></div>
-              <div className="input-group"><label htmlFor="sets">Sets</label><input id="sets" type="number" min="1" value={inputs.sets} disabled={!isIdle} onChange={onInput('sets')} /></div>
-              <div className="input-group"><label htmlFor="setRest">Set Rest</label><input id="setRest" type="text" value={inputs.setRest} disabled={!isIdle} onChange={onInput('setRest')} placeholder="1:00" /></div>
-              <div className="input-group"><label htmlFor="cooldown">Cool-down</label><input id="cooldown" type="text" value={inputs.cooldown} disabled={!isIdle} onChange={onInput('cooldown')} placeholder="0:00" /></div>
-            </div>
-
-            <div className="hint">Times use seconds or mm:ss. Configure prepare, warm-up/cool-down, and sets/cycles for Timer Plus-style workouts.</div>
           </div>
 
           <div className="controls primary-controls">
