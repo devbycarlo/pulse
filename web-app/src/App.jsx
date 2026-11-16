@@ -1,578 +1,656 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import NoSleep from 'nosleep.js'
 import './App.css'
 
+const STORAGE_KEY = 'pulse.presets.v1'
+
+const DEFAULT_CONFIG = {
+  name: 'Quick HIIT',
+  prepare: 5,
+  warmup: 0,
+  work: 30,
+  rest: 10,
+  rounds: 8,
+  sets: 1,
+  setRest: 60,
+  cooldown: 0,
+  voice: true,
+  flash: true,
+}
+
+function clampInt(value, min, max, fallback) {
+  const n = parseInt(value, 10)
+  if (Number.isNaN(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
+
+function parseTimeInput(value, fallback = 0) {
+  if (typeof value === 'number') return Math.max(0, Math.floor(value))
+  const raw = String(value ?? '').trim()
+  if (!raw) return fallback
+  if (raw.includes(':')) {
+    const parts = raw.split(':').map((p) => p.trim())
+    if (parts.some((p) => p === '' || /[^0-9]/.test(p))) return fallback
+    const nums = parts.map((p) => parseInt(p, 10))
+    if (nums.length === 2) return Math.max(0, nums[0] * 60 + nums[1])
+    if (nums.length === 3) return Math.max(0, nums[0] * 3600 + nums[1] * 60 + nums[2])
+    return fallback
+  }
+  if (/^\d+$/.test(raw)) return Math.max(0, parseInt(raw, 10))
+  return fallback
+}
+
+function formatTime(seconds) {
+  const total = Math.max(0, Math.ceil(seconds))
+  const m = Math.floor(total / 60).toString().padStart(2, '0')
+  const s = (total % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
+
+function formatInputTime(seconds) {
+  const total = Math.max(0, Math.floor(seconds))
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function uid() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function buildSequence(config) {
+  const seq = []
+  const sets = Math.max(1, config.sets || 1)
+  const rounds = Math.max(1, config.rounds || 1)
+
+  if (config.prepare > 0) {
+    seq.push({ type: 'prepare', label: 'GET READY', duration: config.prepare, set: 0, round: 0, totalRounds: rounds, totalSets: sets })
+  }
+  if (config.warmup > 0) {
+    seq.push({ type: 'warmup', label: 'WARM UP', duration: config.warmup, set: 0, round: 0, totalRounds: rounds, totalSets: sets })
+  }
+
+  for (let set = 1; set <= sets; set++) {
+    for (let round = 1; round <= rounds; round++) {
+      if (config.work > 0) {
+        seq.push({ type: 'work', label: 'WORK', duration: config.work, set, round, totalRounds: rounds, totalSets: sets })
+      }
+      const isLastRoundOfSet = round === rounds
+      const isLastSet = set === sets
+      if (!isLastRoundOfSet && config.rest > 0) {
+        seq.push({ type: 'rest', label: 'REST', duration: config.rest, set, round, totalRounds: rounds, totalSets: sets })
+      } else if (isLastRoundOfSet && !isLastSet && config.setRest > 0) {
+        seq.push({ type: 'setRest', label: 'SET REST', duration: config.setRest, set, round, totalRounds: rounds, totalSets: sets })
+      } else if (isLastRoundOfSet && !isLastSet && config.setRest <= 0 && config.rest > 0) {
+        // fallback to rest between sets if no set rest configured
+        seq.push({ type: 'rest', label: 'REST', duration: config.rest, set, round, totalRounds: rounds, totalSets: sets })
+      }
+    }
+  }
+
+  if (config.cooldown > 0) {
+    seq.push({ type: 'cooldown', label: 'COOL DOWN', duration: config.cooldown, set: sets, round: rounds, totalRounds: rounds, totalSets: sets })
+  }
+
+  if (seq.length === 0) {
+    seq.push({ type: 'work', label: 'WORK', duration: 30, set: 1, round: 1, totalRounds: 1, totalSets: 1 })
+  }
+  return seq
+}
+
+function phaseColor(type) {
+  switch (type) {
+    case 'prepare': return '#1d4ed8'
+    case 'warmup': return '#b45309'
+    case 'work': return '#064e3b'
+    case 'rest': return '#7f1d1d'
+    case 'setRest': return '#6d28d9'
+    case 'cooldown': return '#0e7490'
+    case 'done': return '#0f172a'
+    default: return '#0f172a'
+  }
+}
+
+function speak(text, enabled) {
+  if (!enabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return
+  try {
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(text)
+    u.rate = 1
+    u.pitch = 1
+    window.speechSynthesis.speak(u)
+  } catch {
+    // ignore
+  }
+}
+
 export default function App() {
-  // Wake Lock API - use refs to persist across renders
+  const [config, setConfig] = useState(DEFAULT_CONFIG)
+  const [inputs, setInputs] = useState({
+    name: DEFAULT_CONFIG.name,
+    prepare: formatInputTime(DEFAULT_CONFIG.prepare),
+    warmup: formatInputTime(DEFAULT_CONFIG.warmup),
+    work: formatInputTime(DEFAULT_CONFIG.work),
+    rest: formatInputTime(DEFAULT_CONFIG.rest),
+    rounds: String(DEFAULT_CONFIG.rounds),
+    sets: String(DEFAULT_CONFIG.sets),
+    setRest: formatInputTime(DEFAULT_CONFIG.setRest),
+    cooldown: formatInputTime(DEFAULT_CONFIG.cooldown),
+  })
+  const [presets, setPresets] = useState([])
+  const [selectedPresetId, setSelectedPresetId] = useState('')
+
+  const [sequence, setSequence] = useState(() => buildSequence(DEFAULT_CONFIG))
+  const [index, setIndex] = useState(0)
+  const [status, setStatus] = useState('idle') // idle | running | paused | done
+  const [timeLeft, setTimeLeft] = useState(sequence[0]?.duration || DEFAULT_CONFIG.work)
+  const [flashOn, setFlashOn] = useState(false)
+
+  // Wake lock
   const wakeLockRef = useRef(null)
   const noSleepRef = useRef(null)
   const noSleepEnabledRef = useRef(false)
   const shouldKeepAwakeRef = useRef(false)
-
-  // Settings state
-  const [workDuration, setWorkDuration] = useState(30)
-  const [restDuration, setRestDuration] = useState(10)
-  const [totalRounds, setTotalRounds] = useState(8)
-
-  // Timer state
-  const [currentPhase, setCurrentPhase] = useState('idle') // 'idle' | 'work' | 'rest' | 'done'
-  const [timeLeft, setTimeLeft] = useState(workDuration)
-  const [currentRound, setCurrentRound] = useState(1)
-  const [timerInterval, setTimerInterval] = useState(null)
-
-  // Wake lock state
-  const [wakeLockStatus, setWakeLockStatus] = useState('unsupported') // 'unsupported' | 'active' | 'inactive' | 'error'
-
-  // Input values
-  const [workInput, setWorkInput] = useState('30')
-  const [restInput, setRestInput] = useState('10')
-  const [roundsInput, setRoundsInput] = useState('8')
-
-  // Web Audio API - use refs to persist across renders
-  const audioCtxRef = useRef(null)
-  const continuousOscRef = useRef(null)
-  const continuousGainRef = useRef(null)
-  const continuousTickIntervalRef = useRef(null)
-  const continuousTickCounterRef = useRef(0)
-  const isFinalCountdownRef = useRef(false)
-  const tickToneIndexRef = useRef(0)
-  const phaseStartTimeRef = useRef(workDuration)
-
-  // Distinct ping-pong tone pairs, one per 3-second block of the timer
-  const TICK_TONE_PAIRS = [
-    [700, 420],
-    [900, 520],
-    [1100, 640],
-    [1300, 760],
-    [1500, 880],
-    [1700, 980],
-  ]
-
-  // Request Screen Wake Lock API sentinel to prevent the screen from sleeping.
-  // Must be called in a secure context (HTTPS/localhost) and may require a user gesture.
   const requestWakeLockRef = useRef(null)
+  const [wakeLockStatus, setWakeLockStatus] = useState('unsupported')
+
+  // Timing/audio refs
+  const rafRef = useRef(null)
+  const endAtRef = useRef(0)
+  const audioCtxRef = useRef(null)
+  const lastWholeRef = useRef(null)
+  const flashTimeoutRef = useRef(null)
+
+  const current = status === 'done' ? null : sequence[index] || null
+  const next = status === 'done' ? null : sequence[index + 1] || null
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) setPresets(parsed)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const persistPresets = (nextPresets) => {
+    setPresets(nextPresets)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(nextPresets)) } catch {}
+  }
+
+  const applyConfig = useCallback((nextConfig, opts = { resetTimer: true }) => {
+    const merged = {
+      ...DEFAULT_CONFIG,
+      ...nextConfig,
+      prepare: Math.max(0, nextConfig.prepare ?? 0),
+      warmup: Math.max(0, nextConfig.warmup ?? 0),
+      work: Math.max(1, nextConfig.work ?? 30),
+      rest: Math.max(0, nextConfig.rest ?? 0),
+      rounds: Math.max(1, nextConfig.rounds ?? 1),
+      sets: Math.max(1, nextConfig.sets ?? 1),
+      setRest: Math.max(0, nextConfig.setRest ?? 0),
+      cooldown: Math.max(0, nextConfig.cooldown ?? 0),
+    }
+    const seq = buildSequence(merged)
+    setConfig(merged)
+    setInputs({
+      name: merged.name || 'Custom Timer',
+      prepare: formatInputTime(merged.prepare),
+      warmup: formatInputTime(merged.warmup),
+      work: formatInputTime(merged.work),
+      rest: formatInputTime(merged.rest),
+      rounds: String(merged.rounds),
+      sets: String(merged.sets),
+      setRest: formatInputTime(merged.setRest),
+      cooldown: formatInputTime(merged.cooldown),
+    })
+    if (opts.resetTimer) {
+      setSequence(seq)
+      setIndex(0)
+      setStatus('idle')
+      setTimeLeft(seq[0]?.duration || merged.work)
+      lastWholeRef.current = null
+    }
+    return merged
+  }, [])
+
+  const ensureAudio = useCallback(() => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+    }
+    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume().catch(() => {})
+    return audioCtxRef.current
+  }, [])
+
+  const playBeep = useCallback((frequency = 880, duration = 0.12, type = 'sine', gain = 0.12) => {
+    try {
+      const ctx = ensureAudio()
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = type
+      osc.frequency.setValueAtTime(frequency, ctx.currentTime)
+      g.gain.setValueAtTime(gain, ctx.currentTime)
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration)
+      osc.connect(g)
+      g.connect(ctx.destination)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + duration)
+    } catch {}
+  }, [ensureAudio])
+
+  const triggerFlash = useCallback(() => {
+    if (!config.flash) return
+    setFlashOn(true)
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+    flashTimeoutRef.current = setTimeout(() => setFlashOn(false), 180)
+  }, [config.flash])
+
+  const announce = useCallback((step, opts = {}) => {
+    if (!step) return
+    triggerFlash()
+    if (opts.transitionBeep !== false) playBeep(920, 0.18, 'triangle', 0.14)
+    if (config.voice) {
+      const parts = [step.label]
+      if (step.set && step.totalSets > 1) parts.push(`set ${step.set} of ${step.totalSets}`)
+      if (step.round && step.totalRounds > 1 && (step.type === 'work' || step.type === 'rest')) parts.push(`round ${step.round} of ${step.totalRounds}`)
+      if (opts.prefix) parts.unshift(opts.prefix)
+      speak(parts.join('. '), true)
+    }
+  }, [config.voice, playBeep, triggerFlash])
+
   const requestWakeLock = useCallback(async () => {
     shouldKeepAwakeRef.current = true
-
     if (!('wakeLock' in navigator)) {
-      // Fallback for browsers without Screen Wake Lock API support
       try {
-        if (!noSleepRef.current) {
-          noSleepRef.current = new NoSleep()
-        }
+        if (!noSleepRef.current) noSleepRef.current = new NoSleep()
         if (!noSleepEnabledRef.current) {
           await noSleepRef.current.enable()
           noSleepEnabledRef.current = true
         }
         setWakeLockStatus('active')
-      } catch (err) {
-        console.log('Wake lock unsupported and NoSleep fallback failed:', err?.message || err)
+      } catch {
         setWakeLockStatus('unsupported')
       }
       return
     }
-
     try {
       if (document.visibilityState !== 'visible') return
-      if (wakeLockRef.current) {
-        setWakeLockStatus('active')
-        return
-      }
-
+      if (wakeLockRef.current) { setWakeLockStatus('active'); return }
       const sentinel = await navigator.wakeLock.request('screen')
       wakeLockRef.current = sentinel
       setWakeLockStatus('active')
-      console.log('Screen Wake Lock acquired')
-
       sentinel.addEventListener('release', () => {
-        if (wakeLockRef.current === sentinel) {
-          wakeLockRef.current = null
-        }
-        console.log('Screen Wake Lock released')
-        // Re-acquire when the page becomes active again if we still want to stay awake
+        if (wakeLockRef.current === sentinel) wakeLockRef.current = null
         if (shouldKeepAwakeRef.current && document.visibilityState === 'visible') {
           requestWakeLockRef.current?.()
         } else if (shouldKeepAwakeRef.current) {
           setWakeLockStatus('inactive')
         }
       })
-    } catch (err) {
-      // Common causes: not a user gesture, page hidden, or platform restrictions
-      console.log('Screen Wake Lock request failed:', err?.name, err?.message)
-      if (wakeLockRef.current || noSleepEnabledRef.current) {
-        setWakeLockStatus('active')
-      } else {
-        // Last-resort fallback for environments where Wake Lock is present but unreliable
-        try {
-          if (!noSleepRef.current) noSleepRef.current = new NoSleep()
-          if (!noSleepEnabledRef.current) {
-            await noSleepRef.current.enable()
-            noSleepEnabledRef.current = true
-          }
-          setWakeLockStatus('active')
-        } catch (fallbackErr) {
-          console.log('NoSleep fallback failed:', fallbackErr?.message || fallbackErr)
-          setWakeLockStatus('error')
+    } catch {
+      try {
+        if (!noSleepRef.current) noSleepRef.current = new NoSleep()
+        if (!noSleepEnabledRef.current) {
+          await noSleepRef.current.enable()
+          noSleepEnabledRef.current = true
         }
+        setWakeLockStatus('active')
+      } catch {
+        setWakeLockStatus(wakeLockRef.current || noSleepEnabledRef.current ? 'active' : 'error')
       }
     }
   }, [])
 
-  useEffect(() => {
-    requestWakeLockRef.current = requestWakeLock
-  }, [requestWakeLock])
+  useEffect(() => { requestWakeLockRef.current = requestWakeLock }, [requestWakeLock])
 
-  // Release screen wake lock and any fallback
   const releaseWakeLock = useCallback(async () => {
     shouldKeepAwakeRef.current = false
-
     if (wakeLockRef.current) {
-      try {
-        await wakeLockRef.current.release()
-        console.log('Screen Wake Lock released')
-      } catch (err) {
-        console.log('Screen Wake Lock release failed:', err?.message || err)
-      }
+      try { await wakeLockRef.current.release() } catch {}
       wakeLockRef.current = null
     }
-
     if (noSleepRef.current && noSleepEnabledRef.current) {
-      try {
-        noSleepRef.current.disable()
-      } catch (err) {
-        console.log('NoSleep disable failed:', err?.message || err)
-      }
+      try { noSleepRef.current.disable() } catch {}
       noSleepEnabledRef.current = false
     }
-
     setWakeLockStatus('inactive')
   }, [])
 
-  // Keep the screen awake while the web app is running using the Screen Wake Lock API.
-  // Re-acquire on visibility/focus changes because the browser releases locks when hidden.
   useEffect(() => {
     shouldKeepAwakeRef.current = true
-
-    const handleVisibilityChange = () => {
-      if (shouldKeepAwakeRef.current && document.visibilityState === 'visible') {
-        requestWakeLock()
-      }
-    }
-
-    // Initial attempt (may require a user gesture in some browsers)
+    const onVis = () => { if (shouldKeepAwakeRef.current && document.visibilityState === 'visible') requestWakeLock() }
     requestWakeLock()
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleVisibilityChange)
-    window.addEventListener('pageshow', handleVisibilityChange)
-
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onVis)
+    window.addEventListener('pageshow', onVis)
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleVisibilityChange)
-      window.removeEventListener('pageshow', handleVisibilityChange)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', onVis)
+      window.removeEventListener('pageshow', onVis)
+      shouldKeepAwakeRef.current = false
     }
   }, [requestWakeLock])
 
-  // Beep function using Web Audio API
-  const playBeep = (frequency, duration, type = 'sine') => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
-    }
-    const ctx = audioCtxRef.current
-    if (ctx.state === 'suspended') ctx.resume()
-    const oscillator = ctx.createOscillator()
-    const gainNode = ctx.createGain()
+  const stopLoop = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    rafRef.current = null
+  }, [])
 
-    oscillator.type = type
-    oscillator.frequency.setValueAtTime(frequency, ctx.currentTime)
+  const finishWorkout = useCallback(() => {
+    stopLoop()
+    setStatus('done')
+    setTimeLeft(0)
+    triggerFlash()
+    playBeep(740, 0.18, 'triangle', 0.14)
+    setTimeout(() => playBeep(988, 0.25, 'triangle', 0.14), 120)
+    speak('Workout complete', config.voice)
+  }, [config.voice, playBeep, speak, stopLoop, triggerFlash])
 
-    gainNode.gain.setValueAtTime(1, ctx.currentTime)
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration)
-
-    oscillator.connect(gainNode)
-    gainNode.connect(ctx.destination)
-
-    oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + duration)
-  }
-
-  // Play a single ping-pong style tick.
-  // Each tick alternates between a high 'ping' and low 'pong' — creates a back-and-forth sound.
-  const playTick = () => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
-    }
-    const ctx = audioCtxRef.current
-    if (ctx.state === 'suspended') ctx.resume()
-    const oscillator = ctx.createOscillator()
-    const gainNode = ctx.createGain()
-
-    // Sine wave for a clean, digital retro-game blip
-    oscillator.type = 'sine'
-
-    const tickCount = continuousTickCounterRef.current
-    const isPing = tickCount % 2 === 0
-    tickToneIndexRef.current = Math.floor(tickCount / 3) % TICK_TONE_PAIRS.length
-
-    if (isFinalCountdownRef.current) {
-      // Final 3 seconds: higher, louder, faster ping-pong
-      oscillator.frequency.setValueAtTime(isPing ? 2000 : 1300, ctx.currentTime)
-      gainNode.gain.setValueAtTime(isPing ? 0.28 : 0.20, ctx.currentTime)
-    } else {
-      const [pingFreq, pongFreq] = TICK_TONE_PAIRS[tickToneIndexRef.current]
-      oscillator.frequency.setValueAtTime(isPing ? pingFreq : pongFreq, ctx.currentTime)
-      gainNode.gain.setValueAtTime(isPing ? 0.16 : 0.09, ctx.currentTime)
-    }
-
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07)
-
-    oscillator.connect(gainNode)
-    gainNode.connect(ctx.destination)
-
-    oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + 0.07)
-
-    continuousTickCounterRef.current += 1
-  }
-
-  // Start a continuous background ticking sound (always on while timer runs)
-  const startContinuousTick = (startTime = timeLeft) => {
-    continuousTickCounterRef.current = 0
-    isFinalCountdownRef.current = false
-    phaseStartTimeRef.current = startTime
-    tickToneIndexRef.current = 0
-    // Tick 4 times per second, alternating ping-pong
-    continuousTickIntervalRef.current = setInterval(playTick, 250)
-    playTick()
-  }
-
-  // Stop the continuous background ticking sound
-  const stopContinuousTick = () => {
-    if (continuousTickIntervalRef.current) {
-      clearInterval(continuousTickIntervalRef.current)
-      continuousTickIntervalRef.current = null
-    }
-    continuousTickCounterRef.current = 0
-    if (continuousOscRef.current) {
-      try { continuousOscRef.current.stop() } catch (e) {}
-      continuousOscRef.current = null
-    }
-    if (continuousGainRef.current) {
-      try { continuousGainRef.current.gain.setValueAtTime(0, continuousGainRef.current.context.currentTime) } catch (e) {}
-      continuousGainRef.current = null
-    }
-  }
-
-  // Update settings when user changes inputs (only when idle)
-  const updateSettings = () => {
-    if (currentPhase !== 'idle') return
-    const work = parseInt(workInput) || 30
-    const rest = parseInt(restInput) || 10
-    const rounds = parseInt(roundsInput) || 8
-    setWorkDuration(work)
-    setRestDuration(rest)
-    setTotalRounds(rounds)
-    setTimeLeft(work)
-    updateUI()
-  }
-
-  // Format time as MM:SS
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0')
-    const s = (seconds % 60).toString().padStart(2, '0')
-    return `${m}:${s}`
-  }
-
-  // Update UI based on current phase
-  const updateUI = () => {
-    let bodyColor = '#0f172a'
-
-    if (currentPhase === 'work') {
-      bodyColor = '#064e3b'
-    } else if (currentPhase === 'rest') {
-      bodyColor = '#7f1d1d'
-    } else if (currentPhase === 'done') {
-      bodyColor = '#0f172a'
-    }
-
-    document.body.style.backgroundColor = bodyColor
-  }
-
-  // Tick function - called every second
-  const tick = () => {
-    setTimeLeft((prev) => {
-      const next = prev - 1
-
-      // Keep tone progression aligned with tick count; no extra 3-second marker beep
-      if (next <= 0) {
-        tickToneIndexRef.current = 0
-      }
-
-      // Countdown beeps (3, 2, 1) with different tones each second
-      if (next <= 3 && next > 0) {
-        // Different tone for each second: 3=high, 2=mid, 1=low
-        const frequencies = [null, null, null, 880, 660, 440] // index by countdown number
-        const duration = next === 3 ? 0.2 : next === 2 ? 0.15 : 0.1
-        playBeep(frequencies[next], duration, 'sine')
-
-        isFinalCountdownRef.current = true
-        continuousTickCounterRef.current = 0
-        // Faster ticking during final 3 seconds (twice as fast)
-        if (continuousTickIntervalRef.current) {
-          clearInterval(continuousTickIntervalRef.current)
-          continuousTickIntervalRef.current = setInterval(playTick, 125)
-        }
-      } else if (next < 0) {
-        isFinalCountdownRef.current = false
-        // Return to normal ticking speed
-        if (continuousTickIntervalRef.current) {
-          clearInterval(continuousTickIntervalRef.current)
-          continuousTickIntervalRef.current = setInterval(playTick, 250)
-        }
-      } else {
-        isFinalCountdownRef.current = false
-      }
-
-      if (next < 0) {
-        playBeep(880, 0.4, 'triangle')
-        tickToneIndexRef.current = 0
-
-        if (currentPhase === 'work') {
-          if (currentRound >= totalRounds) {
-            // Finish workout
-            setCurrentPhase('done')
-            return prev
-          } else {
-            // Switch to Rest
-            setCurrentPhase('rest')
-            setTimeLeft(restDuration)
-            phaseStartTimeRef.current = restDuration
-            return restDuration
-          }
-        } else if (currentPhase === 'rest') {
-          // Switch to Work
-          setCurrentPhase('work')
-          setCurrentRound((prevRound) => prevRound + 1)
-          setTimeLeft(workDuration)
-          phaseStartTimeRef.current = workDuration
-          return workDuration
-        }
-      }
-
-      return next
-    })
-  }
-
-  // Toggle timer (start / pause / resume)
-  const toggleTimer = () => {
-    if (currentPhase === 'done') {
-      resetTimer()
+  const goToStep = useCallback((nextIndex, opts = {}) => {
+    if (nextIndex >= sequence.length) {
+      finishWorkout()
       return
     }
+    const step = sequence[nextIndex]
+    setIndex(nextIndex)
+    setTimeLeft(step.duration)
+    endAtRef.current = performance.now() + step.duration * 1000
+    lastWholeRef.current = Math.ceil(step.duration)
+    if (opts.announce !== false) announce(step)
+  }, [announce, finishWorkout, sequence])
 
-    if (timerInterval) {
-      // Pause
-      clearInterval(timerInterval)
-      setTimerInterval(null)
-      stopContinuousTick()
-      // Keep screen awake while the web app is running
-      requestWakeLock()
-      playBeep(880, 0.4, 'triangle')
-    } else {
-      // Start / Resume
-      if (currentPhase === 'idle') {
-        setCurrentPhase('work')
-        phaseStartTimeRef.current = workDuration
-        startContinuousTick(workDuration)
-      } else {
-        startContinuousTick(timeLeft)
+  const tick = useCallback((now) => {
+    if (status !== 'running') return
+    const remaining = Math.max(0, (endAtRef.current - now) / 1000)
+    setTimeLeft(remaining)
+    const whole = Math.ceil(remaining)
+    if (whole !== lastWholeRef.current && whole >= 0) {
+      lastWholeRef.current = whole
+      if (whole > 0 && whole <= 3) {
+        const f = whole === 3 ? 880 : whole === 2 ? 700 : 560
+        playBeep(f, 0.09, 'sine', 0.12)
       }
-      const intervalId = setInterval(tick, 1000)
-      setTimerInterval(intervalId)
-      playBeep(920, 0.4, 'triangle')
-      // Ensure screen stays awake while running
-      requestWakeLock()
     }
-  }
-
-  // Reset timer
-  const resetTimer = () => {
-    if (timerInterval) {
-      clearInterval(timerInterval)
-      setTimerInterval(null)
+    if (remaining <= 0.01) {
+      const nextIndex = index + 1
+      if (nextIndex >= sequence.length) {
+        finishWorkout()
+        return
+      }
+      goToStep(nextIndex)
     }
-    stopContinuousTick()
-    tickToneIndexRef.current = 0
-    phaseStartTimeRef.current = workDuration
-    setCurrentPhase('idle')
-    setCurrentRound(1)
-    setTimeLeft(workDuration)
-    setWorkInput(workDuration.toString())
-    setRestInput(restDuration.toString())
-    setRoundsInput(totalRounds.toString())
-    // Keep screen awake while the web app is running
-    requestWakeLock()
-  }
+    rafRef.current = requestAnimationFrame(tick)
+  }, [finishWorkout, goToStep, index, playBeep, sequence.length, status])
 
-  // Handle input changes
-  const handleWorkInputChange = (e) => setWorkInput(e.target.value)
-  const handleRestInputChange = (e) => setRestInput(e.target.value)
-  const handleRoundsInputChange = (e) => setRoundsInput(e.target.value)
-
-  // Handle start/reset button click
-  const handleStartClick = () => {
-    if (currentPhase === 'idle') {
-      updateSettings()
+  useEffect(() => {
+    if (status === 'running') {
+      rafRef.current = requestAnimationFrame(tick)
+      return () => stopLoop()
     }
-    toggleTimer()
-  }
+    stopLoop()
+    return undefined
+  }, [status, tick, stopLoop])
 
-  const handleResetClick = () => {
-    resetTimer()
-  }
+  useEffect(() => {
+    const bg = status === 'done' ? phaseColor('done') : phaseColor(current?.type)
+    document.body.style.backgroundColor = bg
+  }, [current, status])
 
-  // Determine if inputs should be disabled
-  const inputsDisabled = currentPhase !== 'idle'
+  useEffect(() => () => {
+    stopLoop()
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+  }, [stopLoop])
 
-  // Render phase text
-  const renderPhase = () => {
-    let phaseClass = 'phase text-idle'
-    if (currentPhase === 'work') {
-      phaseClass = 'phase text-work'
-    } else if (currentPhase === 'rest') {
-      phaseClass = 'phase text-rest'
-    } else if (currentPhase === 'done') {
-      phaseClass = 'phase text-idle'
+  const readConfigFromInputs = useCallback(() => {
+    const next = {
+      name: (inputs.name || 'Custom Timer').trim() || 'Custom Timer',
+      prepare: parseTimeInput(inputs.prepare, 0),
+      warmup: parseTimeInput(inputs.warmup, 0),
+      work: Math.max(1, parseTimeInput(inputs.work, 30)),
+      rest: Math.max(0, parseTimeInput(inputs.rest, 0)),
+      rounds: clampInt(inputs.rounds, 1, 999, 1),
+      sets: clampInt(inputs.sets, 1, 99, 1),
+      setRest: Math.max(0, parseTimeInput(inputs.setRest, 0)),
+      cooldown: Math.max(0, parseTimeInput(inputs.cooldown, 0)),
+      voice: config.voice,
+      flash: config.flash,
     }
-    return <div className={phaseClass}>{phaseClass === 'phase text-work' ? 'WORK' : phaseClass === 'phase text-rest' ? 'REST' : phaseClass === 'phase text-idle' ? 'DONE' : 'READY'}</div>
-  }
+    return applyConfig(next)
+  }, [applyConfig, config.flash, config.voice, inputs])
 
-  // Render round info
-  const renderRoundInfo = () => {
-    if (currentPhase === 'done') {
-      return <div className="round-info">Workout Complete!</div>
-    }
-    return (
-      <div className="round-info">
-        Round {currentRound} / {totalRounds}
-      </div>
-    )
-  }
-
-  // Get time display
-  const timeDisplay = formatTime(timeLeft)
-
-  // Button style based on phase
-  const getButtonStyle = () => {
-    if (currentPhase === 'idle' || currentPhase === 'done') {
-      return { backgroundColor: 'var(--accent)' }
-    }
-    return { backgroundColor: 'rgba(255,255,255,0.1)' }
-  }
-
-  // Wake lock indicator class
-  const getWakeLockClass = () => {
-    let classes = 'wake-lock-indicator'
-    if (wakeLockStatus === 'active') {
-      classes += ' active'
-    } else if (wakeLockStatus === 'error') {
-      classes += ' wake-lock-error'
-    } else if (wakeLockStatus === 'unsupported') {
-      classes += ' wake-lock-not-supported'
+  const start = async () => {
+    await requestWakeLock()
+    ensureAudio()
+    const cfg = status === 'idle' ? readConfigFromInputs() : config
+    let seq = sequence
+    let startIndex = index
+    if (status === 'idle' || status === 'done') {
+      seq = buildSequence(cfg)
+      setSequence(seq)
+      startIndex = 0
+      setIndex(0)
+      setTimeLeft(seq[0].duration)
+      endAtRef.current = performance.now() + seq[0].duration * 1000
+      lastWholeRef.current = Math.ceil(seq[0].duration)
+      announce(seq[0], { prefix: 'Start' })
     } else {
-      classes += ' inactive'
+      // resume
+      endAtRef.current = performance.now() + timeLeft * 1000
+      if (config.voice) speak('Resumed', true)
     }
-    return classes
+    setStatus('running')
   }
 
-  // Wake lock indicator text
-  const getWakeLockText = () => {
-    if (wakeLockStatus === 'active') return 'Screen Awake'
-    if (wakeLockStatus === 'unsupported') return 'Tap to Keep Awake'
-    if (wakeLockStatus === 'error') return 'Tap to Keep Awake'
-    return 'Tap to Keep Awake'
+  const pause = () => {
+    if (status !== 'running') return
+    setStatus('paused')
+    stopLoop()
+    if (config.voice) speak('Paused', true)
   }
+
+  const reset = () => {
+    stopLoop()
+    const seq = buildSequence(config)
+    setSequence(seq)
+    setIndex(0)
+    setStatus('idle')
+    setTimeLeft(seq[0]?.duration || config.work)
+    lastWholeRef.current = null
+  }
+
+  const skip = (dir) => {
+    if (status === 'idle' || status === 'done') return
+    const nextIndex = index + dir
+    if (nextIndex < 0) {
+      goToStep(0)
+      return
+    }
+    if (nextIndex >= sequence.length) {
+      finishWorkout()
+      return
+    }
+    goToStep(nextIndex)
+    if (status === 'paused') {
+      endAtRef.current = performance.now() + sequence[nextIndex].duration * 1000
+    }
+  }
+
+  const restartInterval = () => {
+    if (!current) return
+    setTimeLeft(current.duration)
+    endAtRef.current = performance.now() + current.duration * 1000
+    lastWholeRef.current = Math.ceil(current.duration)
+    triggerFlash()
+    playBeep(760, 0.1, 'sine', 0.1)
+  }
+
+  const savePreset = () => {
+    const cfg = readConfigFromInputs()
+    const name = cfg.name || 'Custom Timer'
+    const existingIdx = presets.findIndex((p) => p.id === selectedPresetId)
+    let nextPresets
+    if (existingIdx >= 0) {
+      nextPresets = presets.map((p) => (p.id === selectedPresetId ? { ...p, ...cfg, name } : p))
+    } else {
+      const id = uid()
+      nextPresets = [{ id, ...cfg, name }, ...presets]
+      setSelectedPresetId(id)
+    }
+    persistPresets(nextPresets)
+  }
+
+  const loadPreset = (id) => {
+    const p = presets.find((x) => x.id === id)
+    if (!p) return
+    setSelectedPresetId(id)
+    applyConfig({ ...DEFAULT_CONFIG, ...p }, { resetTimer: true })
+  }
+
+  const deletePreset = (id) => {
+    const nextPresets = presets.filter((p) => p.id !== id)
+    persistPresets(nextPresets)
+    if (selectedPresetId === id) setSelectedPresetId('')
+  }
+
+  const newPreset = () => {
+    setSelectedPresetId('')
+    applyConfig({ ...DEFAULT_CONFIG, name: 'Custom Timer' })
+  }
+
+  const totalDuration = useMemo(() => sequence.reduce((a, s) => a + s.duration, 0), [sequence])
+  const elapsed = useMemo(() => {
+    if (status === 'done') return totalDuration
+    if (!current) return 0
+    const before = sequence.slice(0, index).reduce((a, s) => a + s.duration, 0)
+    return before + Math.max(0, current.duration - timeLeft)
+  }, [current, index, sequence, status, timeLeft, totalDuration])
+
+  const progress = totalDuration > 0 ? Math.min(1, Math.max(0, elapsed / totalDuration)) : 0
+  const intervalProgress = current && current.duration > 0 ? Math.min(1, Math.max(0, (current.duration - timeLeft) / current.duration)) : 0
+
+  const isIdle = status === 'idle'
+  const displayLabel = status === 'done' ? 'DONE' : status === 'idle' ? 'READY' : (current?.label || 'READY')
+  const displayType = status === 'done' ? 'done' : status === 'idle' ? 'idle' : (current?.type || 'idle')
+
+  const roundInfo = (() => {
+    if (status === 'done') return 'Workout complete'
+    if (!current || current.type === 'prepare' || current.type === 'warmup' || current.type === 'cooldown') {
+      if (next && next.round) return `Next: Round ${next.round}/${next.totalRounds}${next.totalSets > 1 ? ` · Set ${next.set}/${next.totalSets}` : ''}`
+      return 'Press start to begin'
+    }
+    if (current.totalSets > 1) return `Round ${current.round}/${current.totalRounds} · Set ${current.set}/${current.totalSets}`
+    return `Round ${current.round}/${current.totalRounds}`
+  })()
+
+  const nextInfo = (() => {
+    if (status === 'done') return 'Nice work!'
+    if (!next) return status === 'running' || status === 'paused' ? 'Last interval' : 'Configure your workout'
+    return `Next: ${next.label} ${formatTime(next.duration)}`
+  })()
+
+  const wakeText = wakeLockStatus === 'active' ? 'Screen Awake' : 'Tap to Keep Awake'
+  const wakeClass = `wake-lock-indicator ${wakeLockStatus === 'active' ? 'active' : wakeLockStatus === 'error' ? 'wake-lock-error' : wakeLockStatus === 'unsupported' ? 'wake-lock-not-supported' : 'inactive'}`
+
+  const onInput = (key) => (e) => setInputs((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <>
+    <div className={`app-shell ${flashOn ? 'flash' : ''}`}>
       <div className="app-container">
         <div className="timer-section">
-          {renderPhase()}
-          <div id="time-display" className="time-display">
-            {timeDisplay}
+          <div className={`phase text-${displayType}`}>{displayLabel}</div>
+          <div className="time-display">{formatTime(status === 'idle' ? (sequence[0]?.duration || config.work) : timeLeft)}</div>
+          <div className="round-info">{roundInfo}</div>
+          <div className="next-info">{nextInfo}</div>
+
+          <div className="progress-wrap" aria-label="Workout progress">
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${progress * 100}%` }} /></div>
+            <div className="progress-meta">
+              <span>{formatTime(elapsed)} / {formatTime(totalDuration)}</span>
+              <span>Interval {Math.round(intervalProgress * 100)}%</span>
+            </div>
           </div>
-          {renderRoundInfo()}
-          <div
-            className={getWakeLockClass()}
-            onClick={() => requestWakeLock()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') requestWakeLock()
-            }}
-            role="button"
-            tabIndex={0}
-            title="Keep screen awake"
-          >
-            <div className="wake-lock-icon"></div>
-            <span className="wake-lock-text">{getWakeLockText()}</span>
+
+          <div className={wakeClass} onClick={() => requestWakeLock()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') requestWakeLock() }} role="button" tabIndex={0} title="Keep screen awake">
+            <div className={`wake-lock-icon ${wakeLockStatus === 'active' ? 'active' : 'inactive'}`}></div>
+            <span className="wake-lock-text">{wakeText}</span>
           </div>
         </div>
 
         <div className="side-panel">
-          <div className="settings-grid">
-            <div className="input-group">
-              <label htmlFor="work-time">Work (s)</label>
-              <input
-                type="number"
-                id="work-time"
-                value={workInput}
-                min="1"
-                disabled={inputsDisabled}
-                onChange={handleWorkInputChange}
-              />
+          <div className="panel-card">
+            <div className="panel-header">
+              <h2>Workout Setup</h2>
+              <div className="toggles">
+                <label className="toggle"><input type="checkbox" checked={config.voice} onChange={(e) => setConfig((c) => ({ ...c, voice: e.target.checked }))} /> Voice</label>
+                <label className="toggle"><input type="checkbox" checked={config.flash} onChange={(e) => setConfig((c) => ({ ...c, flash: e.target.checked }))} /> Flash</label>
+              </div>
             </div>
-            <div className="input-group">
-              <label htmlFor="rest-time">Rest (s)</label>
-              <input
-                type="number"
-                id="rest-time"
-                value={restInput}
-                min="1"
-                disabled={inputsDisabled}
-                onChange={handleRestInputChange}
-              />
+
+            <div className="settings-grid settings-grid-advanced">
+              <div className="input-group input-wide">
+                <label htmlFor="name">Name</label>
+                <input id="name" type="text" value={inputs.name} disabled={!isIdle} onChange={onInput('name')} placeholder="Workout name" />
+              </div>
+              <div className="input-group"><label htmlFor="prepare">Prepare</label><input id="prepare" type="text" value={inputs.prepare} disabled={!isIdle} onChange={onInput('prepare')} placeholder="0:05" /></div>
+              <div className="input-group"><label htmlFor="warmup">Warm-up</label><input id="warmup" type="text" value={inputs.warmup} disabled={!isIdle} onChange={onInput('warmup')} placeholder="0:00" /></div>
+              <div className="input-group"><label htmlFor="work">Work</label><input id="work" type="text" value={inputs.work} disabled={!isIdle} onChange={onInput('work')} placeholder="0:30" /></div>
+              <div className="input-group"><label htmlFor="rest">Rest</label><input id="rest" type="text" value={inputs.rest} disabled={!isIdle} onChange={onInput('rest')} placeholder="0:10" /></div>
+              <div className="input-group"><label htmlFor="rounds">Rounds</label><input id="rounds" type="number" min="1" value={inputs.rounds} disabled={!isIdle} onChange={onInput('rounds')} /></div>
+              <div className="input-group"><label htmlFor="sets">Sets</label><input id="sets" type="number" min="1" value={inputs.sets} disabled={!isIdle} onChange={onInput('sets')} /></div>
+              <div className="input-group"><label htmlFor="setRest">Set Rest</label><input id="setRest" type="text" value={inputs.setRest} disabled={!isIdle} onChange={onInput('setRest')} placeholder="1:00" /></div>
+              <div className="input-group"><label htmlFor="cooldown">Cool-down</label><input id="cooldown" type="text" value={inputs.cooldown} disabled={!isIdle} onChange={onInput('cooldown')} placeholder="0:00" /></div>
             </div>
-            <div className="input-group">
-              <label htmlFor="rounds">Rounds</label>
-              <input
-                type="number"
-                id="rounds"
-                value={roundsInput}
-                min="1"
-                disabled={inputsDisabled}
-                onChange={handleRoundsInputChange}
-              />
-            </div>
+
+            <div className="hint">Times use seconds or mm:ss. Configure prepare, warm-up/cool-down, and sets/cycles for Timer Plus-style workouts.</div>
           </div>
 
-          <div className="controls">
-            <button
-              id="start-btn"
-              className="btn-primary"
-              onClick={handleStartClick}
-              disabled={inputsDisabled && currentPhase !== 'done'}
-            >
-              {currentPhase === 'done' ? 'Start Workout' : 'Pause'}
-            </button>
-            <button
-              id="reset-btn"
-              className="btn-secondary"
-              onClick={handleResetClick}
-            >
-              Reset
-            </button>
+          <div className="controls primary-controls">
+            {status === 'running' ? (
+              <button className="btn-primary" onClick={pause}>Pause</button>
+            ) : (
+              <button className="btn-primary" onClick={start}>{status === 'paused' ? 'Resume' : status === 'done' ? 'Restart' : 'Start Workout'}</button>
+            )}
+            <button className="btn-secondary" onClick={reset}>Reset</button>
+          </div>
+
+          <div className="controls secondary-controls">
+            <button className="btn-secondary" onClick={() => skip(-1)} disabled={isIdle || status === 'done'}>Prev</button>
+            <button className="btn-secondary" onClick={restartInterval} disabled={isIdle || status === 'done'}>Restart Int.</button>
+            <button className="btn-secondary" onClick={() => skip(1)} disabled={isIdle || status === 'done'}>Skip</button>
+          </div>
+
+          <div className="panel-card presets-card">
+            <div className="panel-header">
+              <h2>Saved Timers</h2>
+              <div className="preset-actions">
+                <button className="btn-mini" onClick={newPreset} disabled={!isIdle}>New</button>
+                <button className="btn-mini" onClick={savePreset} disabled={!isIdle}>Save</button>
+              </div>
+            </div>
+            {presets.length === 0 ? (
+              <div className="empty-presets">No saved timers yet. Set up a workout and tap Save.</div>
+            ) : (
+              <ul className="preset-list">
+                {presets.map((p) => {
+                  const summary = `${p.work}s/${p.rest}s · ${p.rounds}r${p.sets > 1 ? ` · ${p.sets}s` : ''}`
+                  return (
+                    <li key={p.id} className={`preset-item ${selectedPresetId === p.id ? 'selected' : ''}`}>
+                      <button className="preset-load" onClick={() => loadPreset(p.id)} disabled={!isIdle}>
+                        <span className="preset-name">{p.name}</span>
+                        <span className="preset-meta">{summary}</span>
+                      </button>
+                      <button className="preset-delete" onClick={() => deletePreset(p.id)} disabled={!isIdle} aria-label={`Delete ${p.name}`}>×</button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
