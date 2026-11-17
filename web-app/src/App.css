@@ -290,6 +290,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
   width: 100%;
   max-width: 100%;
   min-height: 100%;
+  flex: 1;
   overflow-x: hidden;
   position: relative;
   display: flex;
