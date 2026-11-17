@@ -581,6 +581,8 @@ export default function App() {
 
   const wakeText = wakeLockStatus === 'active' ? 'Screen Awake' : 'Tap to Keep Awake'
   const wakeClass = `wake-lock-indicator ${wakeLockStatus === 'active' ? 'active' : wakeLockStatus === 'error' ? 'wake-lock-error' : wakeLockStatus === 'unsupported' ? 'wake-lock-not-supported' : 'inactive'}`
+  const displayTime = formatTime(status === 'idle' ? (sequence[0]?.duration || config.work) : timeLeft)
+  const timeClass = `time-display${displayTime.length > 5 ? ' time-display--long' : ''}`
 
   const onInput = (key) => (e) => setInputs((prev) => ({ ...prev, [key]: e.target.value }))
 
@@ -589,7 +591,7 @@ export default function App() {
       <div className="app-container">
         <div className="timer-section">
           <div className={`phase text-${displayType}`}>{displayLabel}</div>
-          <div className="time-display">{formatTime(status === 'idle' ? (sequence[0]?.duration || config.work) : timeLeft)}</div>
+          <div className={timeClass}>{displayTime}</div>
           <div className="round-info">{roundInfo}</div>
           <div className="next-info">{nextInfo}</div>
 

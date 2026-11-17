@@ -2,6 +2,7 @@
 .timer-section {
   text-align: center;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .phase {
@@ -15,14 +16,18 @@
 }
 
 .time-display {
-  font-size: clamp(5.5rem, 24vw, 22rem);
+  font-size: clamp(4rem, 42cqi, 20rem);
   font-weight: 800;
   line-height: 0.92;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
   font-family: var(--font-condensed);
   max-width: 100%;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+}
+
+.time-display--long {
+  font-size: clamp(3.5rem, 33cqi, 18rem);
 }
 
 .round-info {
@@ -335,7 +340,6 @@ button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
   .secondary-controls { grid-template-columns: repeat(3, 1fr); }
   .compact-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .timer-section { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .time-display { font-size: clamp(6rem, 18vw, 18rem); }
 }
 
 @media (prefers-reduced-motion: reduce) {
