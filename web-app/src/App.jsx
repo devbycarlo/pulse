@@ -659,10 +659,10 @@ export default function App() {
             ) : (
               <button className="btn-primary" onClick={start}>{status === 'paused' ? 'Resume' : status === 'done' ? 'Restart' : 'Start Workout'}</button>
             )}
-            <button className="btn-secondary" onClick={reset}>Reset</button>
           </div>
 
-          <div className="controls secondary-controls">
+          <div className="controls secondary-controls compact-controls">
+            <button className="btn-secondary" onClick={reset}>Reset</button>
             <button className="btn-secondary" onClick={() => skip(-1)} disabled={isIdle || status === 'done'}>Prev</button>
             <button className="btn-secondary" onClick={restartInterval} disabled={isIdle || status === 'done'}>Restart Int.</button>
             <button className="btn-secondary" onClick={() => skip(1)} disabled={isIdle || status === 'done'}>Skip</button>

@@ -15,12 +15,14 @@
 }
 
 .time-display {
-  font-size: clamp(6rem, 22vw, 18rem);
+  font-size: clamp(5.5rem, 24vw, 22rem);
   font-weight: 800;
-  line-height: 0.95;
+  line-height: 0.92;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   font-family: var(--font-condensed);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .round-info {
@@ -174,8 +176,17 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Controls */
 .controls { display: grid; gap: 0.75rem; }
-.primary-controls { grid-template-columns: 2fr 1fr; }
+.primary-controls { grid-template-columns: 1fr; }
 .secondary-controls { grid-template-columns: repeat(3, 1fr); }
+.compact-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.compact-controls button {
+  padding: 0.7rem 0.4rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
 
 button {
   padding: 0.9rem 0.75rem;
@@ -275,7 +286,19 @@ button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .wake-lock-not-supported .wake-lock-icon { background-color: #6b7280; }
 
 /* Screen flash overlay */
-.app-shell { width: 100%; position: relative; }
+.app-shell {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+  box-sizing: border-box;
+}
 .app-shell.flash::after {
   content: '';
   position: fixed;
@@ -288,16 +311,30 @@ button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 @keyframes flashfade { from { opacity: 1; } to { opacity: 0; } }
 
 @media (max-width: 699px) {
-  .settings-grid, .settings-grid-advanced { grid-template-columns: repeat(2, 1fr); }
-  .primary-controls { grid-template-columns: 1.4fr 1fr; }
+  .settings-grid, .settings-grid-advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .primary-controls { grid-template-columns: 1fr; }
+  .secondary-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .compact-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel-header, .accordion-header { flex-wrap: wrap; }
+  .progress-meta { flex-wrap: wrap; }
+}
+
+@media (max-width: 420px) {
+  .settings-grid, .settings-grid-advanced { grid-template-columns: 1fr; }
+  .input-wide { grid-column: auto; }
+  .primary-controls { grid-template-columns: 1fr; }
+  .secondary-controls, .compact-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toggles { width: 100%; }
 }
 
 @media (orientation: landscape) and (min-width: 700px) {
   .settings-grid { gap: 0.6rem; }
-  .controls { grid-template-columns: 1fr 1fr; }
+  .controls { grid-template-columns: 1fr; }
+  .primary-controls { grid-template-columns: 1fr; }
   .secondary-controls { grid-template-columns: repeat(3, 1fr); }
+  .compact-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .timer-section { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .time-display { font-size: clamp(5rem, 14vw, 14rem); }
+  .time-display { font-size: clamp(6rem, 18vw, 18rem); }
 }
 
 @media (prefers-reduced-motion: reduce) {

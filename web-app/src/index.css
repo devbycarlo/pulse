@@ -20,6 +20,9 @@
 }
 
 html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -30,27 +33,40 @@ body {
   background-color: var(--bg-color);
   color: var(--text-main);
   font-family: var(--font-sans);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: block;
   min-height: 100vh;
   min-height: 100dvh;
   transition: background-color 0.5s ease;
   -webkit-tap-highlight-color: transparent;
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  min-height: 100%;
 }
 
 .app-container {
   background-color: transparent;
-  width: 100%;
-  max-width: 460px;
-  padding: 1.5rem;
+  width: min(100%, 460px);
+  max-width: 100%;
+  padding: 1rem;
   border-radius: 1.5rem;
   box-shadow: none;
   border: none;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
   gap: 1.25rem;
-  margin: 0.75rem;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .side-panel {
@@ -62,8 +78,10 @@ body {
 
 @media (orientation: landscape) and (min-width: 900px) {
   .app-container {
+    width: min(100%, 1200px);
     max-width: 1200px;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: center;
     gap: 2rem;
@@ -71,14 +89,16 @@ body {
   }
 
   .timer-section {
-    flex: 1 1 55%;
+    flex: 1 1 420px;
     min-width: 0;
+    max-width: 100%;
     position: sticky;
-    top: 1rem;
+    top: calc(1rem + env(safe-area-inset-top, 0px));
   }
 
   .side-panel {
-    flex: 0 1 430px;
-    width: min(430px, 42vw);
+    flex: 1 1 360px;
+    width: min(430px, 100%);
+    max-width: 100%;
   }
 }
