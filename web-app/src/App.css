@@ -213,7 +213,11 @@ input, select, textarea {
 }
 button:active { transform: scale(0.97); }
 button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-.btn-primary { background-color: var(--accent); color: white; }
+.btn-primary {
+  background-color: var(--primary-cta);
+  color: #0f172a;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+}
 .btn-secondary { background-color: rgba(255, 255, 255, 0.1); color: white; }
 .btn-mini {
   padding: 0.45rem 0.7rem;
