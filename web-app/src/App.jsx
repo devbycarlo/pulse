@@ -145,7 +145,18 @@ export default function App() {
     setRest: formatInputTime(DEFAULT_CONFIG.setRest),
     cooldown: formatInputTime(DEFAULT_CONFIG.cooldown),
   })
-  const [presets, setPresets] = useState([])
+  const [presets, setPresets] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      const parsed = raw ? JSON.parse(raw) : null
+      if (Array.isArray(parsed)) {
+        return parsed.filter((p) => p && typeof p.id === 'string' && typeof p.name === 'string')
+      }
+    } catch {
+      // Ignore malformed or unavailable storage.
+    }
+    return []
+  })
   const [selectedPresetId, setSelectedPresetId] = useState('')
   const [setupOpen, setSetupOpen] = useState(false)
 
@@ -174,17 +185,6 @@ export default function App() {
   const current = status === 'done' ? null : sequence[index] || null
   const next = status === 'done' ? null : sequence[index + 1] || null
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed)) setPresets(parsed)
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
 
   const persistPresets = (nextPresets) => {
     setPresets(nextPresets)
@@ -330,9 +330,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    shouldKeepAwakeRef.current = true
     const onVis = () => { if (shouldKeepAwakeRef.current && document.visibilityState === 'visible') requestWakeLock() }
-    requestWakeLock()
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onVis)
     window.addEventListener('pageshow', onVis)
@@ -357,7 +355,8 @@ export default function App() {
     playBeep(740, 0.18, 'triangle', 0.14)
     setTimeout(() => playBeep(988, 0.25, 'triangle', 0.14), 120)
     speak('Workout complete', config.voice)
-  }, [config.voice, playBeep, speak, stopLoop, triggerFlash])
+    void releaseWakeLock()
+  }, [config.voice, playBeep, releaseWakeLock, stopLoop, triggerFlash])
 
   const goToStep = useCallback((nextIndex, opts = {}) => {
     if (nextIndex >= sequence.length) {
@@ -372,7 +371,7 @@ export default function App() {
     if (opts.announce !== false) announce(step)
   }, [announce, finishWorkout, sequence])
 
-  const tick = useCallback((now) => {
+  const tick = useCallback(function tick(now) {
     if (status !== 'running') return
     const remaining = Math.max(0, (endAtRef.current - now) / 1000)
     setTimeLeft(remaining)
@@ -468,11 +467,9 @@ export default function App() {
     ensureAudio()
     const cfg = status === 'idle' ? readConfigFromInputs() : config
     let seq = sequence
-    let startIndex = index
     if (status === 'idle' || status === 'done') {
       seq = buildSequence(cfg)
       setSequence(seq)
-      startIndex = 0
       setIndex(0)
       setTimeLeft(seq[0].duration)
       endAtRef.current = performance.now() + seq[0].duration * 1000
@@ -495,6 +492,7 @@ export default function App() {
 
   const reset = () => {
     stopLoop()
+    void releaseWakeLock()
     const seq = buildSequence(config)
     setSequence(seq)
     setIndex(0)

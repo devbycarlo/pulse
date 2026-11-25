@@ -11,11 +11,7 @@ query GetUser @auth(level: USER) {
   }
 }
 
-query ListUsers @auth(level: PUBLIC, insecureReason: "Public profiles are part of the social feature.") {
-  users {
-    username profilePhotoUrl
-  }
-}
+
 
 # ---------------------------------------------------------------
 # WorkoutCategory

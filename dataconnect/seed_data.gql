@@ -15,9 +15,9 @@ mutation SeedDatabase @transaction @auth(expr: "auth.token.admin == true") {
     { id: "20000000-0000-0000-0000-000000000003", name: "Yoga Flow", workDurationSeconds: 120, restDurationSeconds: 0, rounds: 1, userId: "00000000-0000-0000-0000-000000000003", workoutCategoryId: "10000000-0000-0000-0000-000000000003" }
   ])
   interval_insertMany(data: [
-    { name: "Warm-up", durationSeconds: 300, sequenceOrder: 1, routineId: "20000000-0000-0000-0000-000000000001" },
-    { name: "Sprint", durationSeconds: 45, sequenceOrder: 2, routineId: "20000000-0000-0000-0000-000000000001" },
-    { name: "Bench Press", durationSeconds: 60, sequenceOrder: 1, routineId: "20000000-0000-0000-0000-000000000002" }
+    { name: "Warm-up", durationSeconds: 300, sequenceOrder: 1, userId: "00000000-0000-0000-0000-000000000001", routineId: "20000000-0000-0000-0000-000000000001" },
+    { name: "Sprint", durationSeconds: 45, sequenceOrder: 2, userId: "00000000-0000-0000-0000-000000000001", routineId: "20000000-0000-0000-0000-000000000001" },
+    { name: "Bench Press", durationSeconds: 60, sequenceOrder: 1, userId: "00000000-0000-0000-0000-000000000002", routineId: "20000000-0000-0000-0000-000000000002" }
   ])
   workoutSession_insertMany(data: [
     { completedAt: "2023-10-27T10:00:00Z", totalDurationSeconds: 1800, userId: "00000000-0000-0000-0000-000000000001", routineId: "20000000-0000-0000-0000-000000000001" },
