@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from 'react'
 import NoSleep from 'nosleep.js'
 import './App.css'
 
@@ -169,6 +169,7 @@ export default function App() {
   const audioCtxRef = useRef(null)
   const lastWholeRef = useRef(null)
   const flashTimeoutRef = useRef(null)
+  const fillRef = useRef(null)
 
   const current = status === 'done' ? null : sequence[index] || null
   const next = status === 'done' ? null : sequence[index + 1] || null
@@ -375,6 +376,19 @@ export default function App() {
     if (status !== 'running') return
     const remaining = Math.max(0, (endAtRef.current - now) / 1000)
     setTimeLeft(remaining)
+
+    // Paint the meter straight from the animation clock. Relying on React's
+    // state render plus a CSS width transition made the bar appear frozen
+    // until a status change (pause/resume) forced a fresh paint.
+    if (fillRef.current && sequence.length) {
+      const before = sequence.slice(0, index).reduce((sum, step) => sum + step.duration, 0)
+      const total = sequence.reduce((sum, step) => sum + step.duration, 0)
+      const stepDuration = sequence[index]?.duration || 0
+      const elapsed = before + Math.max(0, stepDuration - remaining)
+      const pct = total > 0 ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0
+      fillRef.current.style.width = `${pct}%`
+    }
+
     const whole = Math.ceil(remaining)
     if (whole !== lastWholeRef.current && whole >= 0) {
       lastWholeRef.current = whole
@@ -397,7 +411,7 @@ export default function App() {
       goToStep(nextIndex)
     }
     rafRef.current = requestAnimationFrame(tick)
-  }, [finishWorkout, goToStep, index, playBeep, sequence.length, status])
+  }, [finishWorkout, goToStep, index, playBeep, sequence, status])
 
   useEffect(() => {
     if (status === 'running') {
@@ -559,6 +573,14 @@ export default function App() {
   const progress = totalDuration > 0 ? Math.min(1, Math.max(0, elapsed / totalDuration)) : 0
   const intervalProgress = current && current.duration > 0 ? Math.min(1, Math.max(0, (current.duration - timeLeft) / current.duration)) : 0
 
+  // While running the rAF loop paints the meter directly (see tick). For
+  // idle/paused/done, keep it in sync with the derived progress value.
+  useLayoutEffect(() => {
+    if (status !== 'running' && fillRef.current) {
+      fillRef.current.style.width = `${progress * 100}%`
+    }
+  }, [progress, status])
+
   const isIdle = status === 'idle'
   const displayLabel = status === 'done' ? 'DONE' : status === 'idle' ? 'READY' : (current?.label || 'READY')
   const displayType = status === 'done' ? 'done' : status === 'idle' ? 'idle' : (current?.type || 'idle')
@@ -596,7 +618,7 @@ export default function App() {
           <div className="next-info">{nextInfo}</div>
 
           <div className="progress-wrap" aria-label="Workout progress">
-            <div className="progress-bar"><div className="progress-fill" style={{ width: `${progress * 100}%` }} /></div>
+            <div className="progress-bar"><div className="progress-fill" ref={fillRef} /></div>
             <div className="progress-meta">
               <span>{formatTime(elapsed)} / {formatTime(totalDuration)}</span>
               <span>Interval {Math.round(intervalProgress * 100)}%</span>
