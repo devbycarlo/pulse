@@ -423,7 +423,7 @@ export default function App() {
   }, [status, tick, stopLoop])
 
   useEffect(() => {
-    const bg = status === 'done' ? phaseColor('done') : phaseColor(current?.type)
+    const bg = status === 'idle' ? '#0b94b2' : status === 'done' ? phaseColor('done') : phaseColor(current?.type)
     document.body.style.backgroundColor = bg
   }, [current, status])
 
