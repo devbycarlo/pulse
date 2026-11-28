@@ -235,6 +235,41 @@ export default function App() {
     return audioCtxRef.current
   }, [])
 
+  // Safari leaves an AudioContext suspended unless it is created/resumed from
+  // a real user gesture. Unlock on the first pointer/key event, before start()
+  // awaits the wake-lock request and loses that activation. Keep listening so
+  // a context suspended by backgrounding can be re-unlocked on the next tap.
+  const unlockAudio = useCallback(() => {
+    if (audioCtxRef.current?.state === 'running') return
+    let ctx
+    try {
+      ctx = ensureAudio()
+    } catch {
+      return
+    }
+    try {
+      const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
+      const silent = ctx.createBufferSource()
+      silent.buffer = buf
+      silent.connect(ctx.destination)
+      silent.start(0)
+    } catch {
+      // ignore
+    }
+  }, [ensureAudio])
+
+  useEffect(() => {
+    const onGesture = () => { unlockAudio() }
+    document.addEventListener('pointerdown', onGesture, true)
+    document.addEventListener('touchstart', onGesture, true)
+    document.addEventListener('keydown', onGesture, true)
+    return () => {
+      document.removeEventListener('pointerdown', onGesture, true)
+      document.removeEventListener('touchstart', onGesture, true)
+      document.removeEventListener('keydown', onGesture, true)
+    }
+  }, [unlockAudio])
+
   const playBeep = useCallback((frequency = 880, duration = 0.12, type = 'sine', gain = 0.12) => {
     try {
       const ctx = ensureAudio()
@@ -463,8 +498,8 @@ export default function App() {
   }, [applyConfig, config.flash, config.voice, inputs])
 
   const start = async () => {
+    unlockAudio()
     await requestWakeLock()
-    ensureAudio()
     const cfg = status === 'idle' ? readConfigFromInputs() : config
     let seq = sequence
     if (status === 'idle' || status === 'done') {

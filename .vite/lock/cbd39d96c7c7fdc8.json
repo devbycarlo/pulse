@@ -1,0 +1,14 @@
+{
+  "command": "dev",
+  "root": "C:/Users/Administrator/Local Sites/pulse",
+  "configFile": null,
+  "mode": "development",
+  "pid": 11468,
+  "startTime": "win32:639314774374943364",
+  "urls": {
+    "local": [
+      "http://localhost:5173/"
+    ],
+    "network": []
+  }
+}
